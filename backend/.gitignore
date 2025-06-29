@@ -1,0 +1,12 @@
+venv/
+firebase_backend/
+__pycache__/
+routes/__pycache__/
+models/__pycache__/
+config/__pycache__/
+utils/__pycache__/
+Admin/__pycache__/
+
+cert.pem
+key.pem
+
