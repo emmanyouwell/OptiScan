@@ -32,16 +32,22 @@ function Register() {
     }
 
     try {
-      const response = await axios.post(`${BASE_URL}/api/auth/register`, {
-        username: formData.username,
-        email: formData.email,
-        password: formData.password
+      // Create FormData object to match backend expectations
+      const formDataToSend = new FormData();
+      formDataToSend.append('username', formData.username);
+      formDataToSend.append('email', formData.email);
+      formDataToSend.append('password', formData.password);
+
+      const response = await axios.post(`${BASE_URL}/api/users/register`, formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
       });
       alert('Registration successful!');
       console.log('Register response:', response.data);
       // Optionally, redirect or clear form here
     } catch (err) {
-      setError(err.response?.data?.error || 'Registration failed');
+      setError(err.response?.data?.detail || 'Registration failed');
     }
   };
 

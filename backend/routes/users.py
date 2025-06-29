@@ -83,3 +83,46 @@ async def register(
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 
+@router.post("/login")
+async def login(
+    email: str = Form(...),
+    password: str = Form(...)
+):
+    try:
+        # Find user by email
+        user = db["users"].find_one({"email": email})
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Verify password
+        if not bcrypt.checkpw(password.encode('utf-8'), user["password"].encode('utf-8')):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Create access token
+        access_token_expires = timedelta(days=30)  # Token expires in 30 days
+        access_token = create_access_token(
+            data={"sub": str(user["_id"])},
+            expires_delta=access_token_expires
+        )
+        
+        # Return user info and token
+        return JSONResponse(content={
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": str(user["_id"]),
+                "username": user["username"],
+                "email": user["email"],
+                "role": user["role"]
+            }
+        })
+    
+    except HTTPException as e:
+        logger.error(f"HTTPException: {str(e)}")
+        raise e
+    except Exception as e:
+        logger.error(f"An error occurred during login: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"An error occurred during login: {str(e)}")
+
+
+

@@ -5,7 +5,7 @@ import BASE_URL from '../../common/baseURL';
 
 function LoginPage() {
   const [formData, setFormData] = useState({
-    username: '',
+    email: '',
     password: ''
   });
   
@@ -24,21 +24,33 @@ function LoginPage() {
     setError('');
     
     // Basic validation
-    if (!formData.username || !formData.password) {
-      setError('Please enter both username and password');
+    if (!formData.email || !formData.password) {
+      setError('Please enter both email and password');
       return;
     }
     
     try {
-      const response = await axios.post(`${BASE_URL}/api/auth/login`, {
-        username: formData.username,
-        password: formData.password
+      // Create FormData object to match backend expectations
+      const formDataToSend = new FormData();
+      formDataToSend.append('email', formData.email);
+      formDataToSend.append('password', formData.password);
+
+      const response = await axios.post(`${BASE_URL}/api/users/login`, formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
       });
+      
       alert('Login successful!');
-      // Optionally, store token: localStorage.setItem('token', response.data.token);
+      
+      // Store token and user data
+      localStorage.setItem('access_token', response.data.access_token);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      
+      console.log('Login response:', response.data);
       // Redirect user or update UI here
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed');
+      setError(err.response?.data?.detail || 'Login failed');
     }
   };
 
@@ -51,14 +63,14 @@ function LoginPage() {
         
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label htmlFor="username">Username</label>
+            <label htmlFor="email">Email</label>
             <input
               type="text"
-              id="username"
-              name="username"
-              value={formData.username}
+              id="email"
+              name="email"
+              value={formData.email}
               onChange={handleChange}
-              placeholder="Enter your username"
+              placeholder="Enter your email"
             />
           </div>
           
