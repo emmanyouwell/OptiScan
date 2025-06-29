@@ -7,9 +7,9 @@ config/__pycache__/
 utils/__pycache__/
 Admin/__pycache__/
 
+# Ignore shape predictor files
+shape_predictor_68_face_landmarks.dat
 
-shape_predictor_68_face_landmarks.dat/
-shape_predictor_68_face_landmarks.dat.bz2/
 
 cert.pem
 key.pem
