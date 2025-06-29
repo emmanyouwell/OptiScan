@@ -7,6 +7,10 @@ config/__pycache__/
 utils/__pycache__/
 Admin/__pycache__/
 
+
+shape_predictor_68_face_landmarks.dat/
+shape_predictor_68_face_landmarks.dat.bz2/
+
 cert.pem
 key.pem
 

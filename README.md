@@ -18,4 +18,4 @@ install the needed requirements if wala pa:
 --pip install requirements.txt
 
 continue and run the web/backend server:
---uvicorn main:app --reload
+--uvicorn server:app --reload 
