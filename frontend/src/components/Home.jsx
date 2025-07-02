@@ -9,7 +9,7 @@ function Home() {
       <header className="navbar">
         <div className="nav-content">
           <div className="logo">
-            <h2>MyApp</h2>
+            <h2>OptiScan</h2>
           </div>
           <nav className="nav-links">
             <a href="/">Home</a>
