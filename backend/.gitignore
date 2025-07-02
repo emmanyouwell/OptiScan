@@ -10,6 +10,13 @@ Admin/__pycache__/
 # Ignore shape predictor files
 shape_predictor_68_face_landmarks.dat
 
+Dry_Eye_Dataset.csv
+dry_eye_model.pkl
+eye_detection.py 
+test.py
+
+ml_models/
+
 
 cert.pem
 key.pem
