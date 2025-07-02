@@ -6,7 +6,6 @@ api_app = FastAPI()
 
 api_app.include_router(users.router, prefix="/users")
 
-
 app = FastAPI()
 
 origins = ["http://localhost:5173"]
