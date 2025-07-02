@@ -15,7 +15,7 @@ continue:
 --.\venv\Scripts\activate
 
 install the needed requirements if wala pa:
---pip install requirements.txt
+--pip install -r requirements.txt
 
 continue and run the web/backend server:
 --uvicorn server:app --reload 
