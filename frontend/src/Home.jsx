@@ -1,6 +1,6 @@
 // Simple Home Page Component
 import React from 'react';
-import './CSS/Home.css';
+import './CSS/Home.css'; // Assuming you have a CSS file for styling
 
 function Home() {
   return (

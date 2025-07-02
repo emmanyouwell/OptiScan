@@ -1,6 +1,6 @@
 // Register component with centered container
 import React, { useState } from 'react';
-import '../CSS/Register.css';
+import '../../CSS/Register.css'; // Adjust the path as needed
 import axios from 'axios';
 import BASE_URL from '../../common/baseURL';
 
