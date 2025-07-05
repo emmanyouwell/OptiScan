@@ -11,7 +11,7 @@ class ColorBlindnessType(str, Enum):
     tritanopia = "tritanopia"  # Blue-blind
 
 class IshiharaPlate(BaseModel):
-    plate_number: int = Field(..., ge=1, le=99)  # Standard Ishihara plates
+    plate_number: int = Field(..., ge=1, le=38)  # Standard Ishihara plates
     correct_answer: str
     user_answer: str
     is_correct: bool

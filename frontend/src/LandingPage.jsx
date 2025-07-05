@@ -1,10 +1,9 @@
-// Simple Home Page Component
 import React from 'react';
-import './CSS/Home.css'; // Assuming you have a CSS file for styling
+import './CSS/LandingPage.css';
 
-function Home() {
+function LandingPage() {
   return (
-    <div className="home-container">
+    <div className="LandingPage-container">
       {/* Navigation Header */}
       <header className="navbar">
         <div className="nav-content">
@@ -12,7 +11,7 @@ function Home() {
             <h2>OptiScan</h2>
           </div>
           <nav className="nav-links">
-            <a href="/">Home</a>
+            <a href="/">LandingPage</a>
             <a href="/about">About</a>
             <a href="/services">Services</a>
             <a href="/contact">Contact</a>
@@ -76,4 +75,4 @@ function Home() {
   );
 }
 
-export default Home;
+export default LandingPage;
