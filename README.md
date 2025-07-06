@@ -1,5 +1,13 @@
 Instructions:
 
+
+
+Mobile
+--cd mobile 
+--npm install
+--npx expo start
+
+
 Frontend
 --cd frontend
 --npm install
