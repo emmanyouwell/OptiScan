@@ -27,3 +27,19 @@ install the needed requirements if wala pa:
 
 continue and run the web/backend server:
 --uvicorn server:app --reload 
+
+
+--SHORTCUTS--
+
+--backend shortcut
+cd backend
+.\venv\Scripts\activate
+uvicorn server:app --reload 
+
+--frontend shortcut
+cd frontend
+npm run dev
+
+--mobile shortcut
+cd mobile
+npx expo start

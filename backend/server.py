@@ -1,12 +1,12 @@
-# In your server.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import users, eye_tracking  # Add this import
+from routes import users, eye_tracking, mediapipe # Add mediapipe_routes import
 
 api_app = FastAPI()
 
 api_app.include_router(users.router, prefix="/users")
-api_app.include_router(eye_tracking.router, prefix="/eye-tracking")  # Add this line
+api_app.include_router(eye_tracking.router, prefix="/eye-tracking")
+api_app.include_router(mediapipe.router, prefix="/mediapipe")  # Add this line
 
 app = FastAPI()
 
