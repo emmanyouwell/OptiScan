@@ -5,196 +5,512 @@ from bson import ObjectId
 from pydantic import BaseModel, Field
 from enum import Enum
 import numpy as np
+import cv2
+import base64
+from io import BytesIO
+from PIL import Image
+import mediapipe as mp
+
+# Import your simplified models
+from models.eye_tracking import (
+    EyeTestSession, 
+    EarDetectionResult, 
+    PupilDilationResult, 
+    BlinkCountResult,
+    FrameData,
+    EarTestRequest,
+    PupilTestRequest,
+    BlinkTestRequest,
+    TestStatus,
+    AlertStatus
+)
 
 # MongoDB
 from config.db import db
 
 router = APIRouter()
 
-# Collection name
-sessions_collection = db.eye_tracking_sessions
+# Collections
+sessions_collection = db.eye_test_sessions
 
-# Models
-class AlertStatus(str, Enum):
-    NORMAL = "Normal"
-    OPIOID = "Opioid"
-    STIMULANT = "Stimulant"
-    NEUROLOGICAL = "Neurological"
-    UNKNOWN = "Unknown"
+# Simple processors for each test
+class SimpleEarProcessor:
+    def __init__(self):
+        self.mp_face_mesh = mp.solutions.face_mesh
+        self.face_mesh = self.mp_face_mesh.FaceMesh(
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+        
+    def decode_frame(self, image_data: str):
+        """Turn base64 image into something we can work with"""
+        try:
+            image_bytes = base64.b64decode(image_data.split(',')[1])
+            image = Image.open(BytesIO(image_bytes))
+            return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        except Exception as e:
+            print(f"Error decoding frame: {e}")
+            return None
+    
+    def calculate_ear_score(self, landmarks):
+        """Calculate simple EAR score"""
+        try:
+            # Simple calculation based on eye landmarks
+            # This is a simplified version - you can make it more complex
+            left_eye = landmarks.landmark[33]  # Left eye landmark
+            right_eye = landmarks.landmark[362]  # Right eye landmark
+            
+            # Simple score based on eye openness (mock calculation)
+            left_score = min(1.0, max(0.0, left_eye.y * 2))  # Simplified
+            right_score = min(1.0, max(0.0, right_eye.y * 2))  # Simplified
+            
+            return left_score, right_score
+        except:
+            return 0.3, 0.3  # Default values
+            
+    def process_frames(self, frames):
+        """Process all frames and return results"""
+        left_scores = []
+        right_scores = []
+        face_count = 0
+        
+        for frame_data in frames:
+            frame = self.decode_frame(frame_data.image)
+            if frame is None:
+                continue
+                
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = self.face_mesh.process(rgb_frame)
+            
+            if results.multi_face_landmarks:
+                face_count += 1
+                landmarks = results.multi_face_landmarks[0]
+                left_score, right_score = self.calculate_ear_score(landmarks)
+                left_scores.append(left_score)
+                right_scores.append(right_score)
+            else:
+                left_scores.append(0.0)
+                right_scores.append(0.0)
+        
+        return {
+            'left_avg': float(np.mean(left_scores)) if left_scores else 0.0,
+            'right_avg': float(np.mean(right_scores)) if right_scores else 0.0,
+            'face_detected': face_count > 0,
+            'total_frames': len(frames)
+        }
 
-class EyeMetricSnapshot(BaseModel):
-    timestamp: datetime
-    ear_left: float = Field(..., ge=0, le=1)
-    ear_right: float = Field(..., ge=0, le=1)
-    pupil_size_left_mm: float = Field(..., gt=0)
-    pupil_size_right_mm: float = Field(..., gt=0)
-    distance_cm: float = Field(..., gt=0)
-    alert_status: AlertStatus
-    blink_id: Optional[int] = None
+class SimplePupilProcessor:
+    def decode_frame(self, image_data: str):
+        """Turn base64 image into something we can work with"""
+        try:
+            image_bytes = base64.b64decode(image_data.split(',')[1])
+            image = Image.open(BytesIO(image_bytes))
+            return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        except Exception as e:
+            print(f"Error decoding frame: {e}")
+            return None
+    
+    def calculate_pupil_size(self, frame):
+        """Calculate pupil size (simplified)"""
+        try:
+            # This is a mock calculation - replace with actual pupil detection
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            height, width = gray.shape
+            
+            # Mock pupil size calculation
+            # In real implementation, you'd use proper pupil detection
+            left_pupil = 3.5 + np.random.normal(0, 0.5)  # Mock data
+            right_pupil = 3.5 + np.random.normal(0, 0.5)  # Mock data
+            
+            return max(1.0, left_pupil), max(1.0, right_pupil)
+        except:
+            return 3.5, 3.5  # Default normal size
+    
+    def process_frames(self, frames):
+        """Process all frames and return pupil measurements"""
+        left_pupils = []
+        right_pupils = []
+        
+        for frame_data in frames:
+            frame = self.decode_frame(frame_data.image)
+            if frame is None:
+                continue
+                
+            left_size, right_size = self.calculate_pupil_size(frame)
+            left_pupils.append(left_size)
+            right_pupils.append(right_size)
+        
+        return {
+            'left_avg': float(np.mean(left_pupils)) if left_pupils else 3.5,
+            'right_avg': float(np.mean(right_pupils)) if right_pupils else 3.5,
+            'total_frames': len(frames)
+        }
 
-class EyeTrackingSessionCreate(BaseModel):
-    device_info: dict = Field(default_factory=dict)
-    raw_metrics: List[EyeMetricSnapshot] = Field(default_factory=list)
+class SimpleBlinkProcessor:
+    def __init__(self):
+        self.mp_face_mesh = mp.solutions.face_mesh
+        self.face_mesh = self.mp_face_mesh.FaceMesh(
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+        
+    def decode_frame(self, image_data: str):
+        """Turn base64 image into something we can work with"""
+        try:
+            image_bytes = base64.b64decode(image_data.split(',')[1])
+            image = Image.open(BytesIO(image_bytes))
+            return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        except Exception as e:
+            print(f"Error decoding frame: {e}")
+            return None
+    
+    def detect_blink(self, landmarks):
+        """Simple blink detection"""
+        try:
+            # Simple blink detection based on eye aspect ratio
+            left_eye_top = landmarks.landmark[159]
+            left_eye_bottom = landmarks.landmark[145]
+            eye_height = abs(left_eye_top.y - left_eye_bottom.y)
+            
+            # If eye height is very small, it's likely a blink
+            return eye_height < 0.01  # Threshold for blink
+        except:
+            return False
+    
+    def process_frames(self, frames):
+        """Count blinks in all frames"""
+        blink_count = 0
+        prev_blink = False
+        
+        for frame_data in frames:
+            frame = self.decode_frame(frame_data.image)
+            if frame is None:
+                continue
+                
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = self.face_mesh.process(rgb_frame)
+            
+            if results.multi_face_landmarks:
+                landmarks = results.multi_face_landmarks[0]
+                is_blink = self.detect_blink(landmarks)
+                
+                # Count blink when transitioning from not-blink to blink
+                if is_blink and not prev_blink:
+                    blink_count += 1
+                    
+                prev_blink = is_blink
+        
+        return {
+            'total_blinks': blink_count,
+            'total_frames': len(frames)
+        }
 
-class EyeTrackingSessionResponse(EyeTrackingSessionCreate):
-    _id: str
-    start_time: datetime
-    end_time: Optional[datetime] = None
-    duration_sec: Optional[float] = None
-    blink_count: int
-    avg_pupil_size: float
-    avg_ear: float
-    screen_time_min: float
-    classification_stats: Dict[AlertStatus, float]
-    distance_stats: Dict[str, float]
-    pupil_asymmetry: float
+# Create processors
+ear_processor = SimpleEarProcessor()
+pupil_processor = SimplePupilProcessor()
+blink_processor = SimpleBlinkProcessor()
 
-@router.post("/sessions", response_model=EyeTrackingSessionResponse)
-async def create_session(session_data: EyeTrackingSessionCreate):
-    """Create a new eye tracking session"""
+# Routes for each test
+@router.post("/test/ear-detection")
+async def run_ear_test(request: EarTestRequest):
+    """Run the ear detection test"""
     try:
-        # Create session object
-        session_id = str(ObjectId())
-        start_time = datetime.now(timezone.utc)
+        # Process the frames
+        results = ear_processor.process_frames(request.frames)
         
-        # Calculate derived metrics
-        avg_pupil_size = np.mean([
-            (m.pupil_size_left_mm + m.pupil_size_right_mm)/2 
-            for m in session_data.raw_metrics
-        ]) if session_data.raw_metrics else 0
+        # Create result object
+        ear_result = EarDetectionResult(
+            status=TestStatus.COMPLETED,
+            left_ear_score=results['left_avg'],
+            right_ear_score=results['right_avg'],
+            face_detected=results['face_detected'],
+            distance_cm=60.0  # Mock distance
+        )
         
-        avg_ear = np.mean([
-            (m.ear_left + m.ear_right)/2 
-            for m in session_data.raw_metrics
-        ]) if session_data.raw_metrics else 0
+        # Analyze the results
+        ear_result.analyze()
         
-        blink_count = len([m for m in session_data.raw_metrics if m.blink_id is not None])
-        
-        # Calculate classification stats
-        status_counts = {status: 0 for status in AlertStatus}
-        for metric in session_data.raw_metrics:
-            status_counts[metric.alert_status] += 1
-        
-        total = len(session_data.raw_metrics)
-        classification_stats = {
-            status: (count / total) * 100 if total > 0 else 0
-            for status, count in status_counts.items()
+        return {
+            "status": "completed",
+            "left_ear_score": ear_result.left_ear_score,
+            "right_ear_score": ear_result.right_ear_score,
+            "face_detected": ear_result.face_detected,
+            "result": ear_result.result,
+            "total_frames": results['total_frames']
         }
         
-        # Calculate distance stats
-        distances = [m.distance_cm for m in session_data.raw_metrics]
-        distance_stats = {
-            "avg": np.mean(distances) if distances else 0,
-            "min": np.min(distances) if distances else 0,
-            "max": np.max(distances) if distances else 0
+    except Exception as e:
+        print(f"Error in ear test: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/test/pupil-dilation")
+async def run_pupil_test(request: PupilTestRequest):
+    """Run the pupil dilation test"""
+    try:
+        # Process the frames
+        results = pupil_processor.process_frames(request.frames)
+        
+        # Create result object
+        pupil_result = PupilDilationResult(
+            status=TestStatus.COMPLETED,
+            left_pupil_mm=results['left_avg'],
+            right_pupil_mm=results['right_avg']
+        )
+        
+        # Analyze the results
+        pupil_result.analyze()
+        
+        return {
+            "status": "completed",
+            "left_pupil_mm": pupil_result.left_pupil_mm,
+            "right_pupil_mm": pupil_result.right_pupil_mm,
+            "result": pupil_result.result,
+            "total_frames": results['total_frames']
         }
         
-        # Calculate pupil asymmetry
-        pupil_asymmetry = np.mean([
-            abs(m.pupil_size_left_mm - m.pupil_size_right_mm)
-            for m in session_data.raw_metrics
-        ]) if session_data.raw_metrics else 0
+    except Exception as e:
+        print(f"Error in pupil test: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/test/blink-count")
+async def run_blink_test(request: BlinkTestRequest):
+    """Run the blink count test"""
+    try:
+        # Process the frames
+        results = blink_processor.process_frames(request.frames)
         
-        # Create session document
-        session = {
-            "_id": session_id,
-            "start_time": start_time,
-            "end_time": None,
-            "duration_sec": None,
-            "blink_count": blink_count,
-            "avg_pupil_size": float(avg_pupil_size),
-            "avg_ear": float(avg_ear),
-            "screen_time_min": 0,
-            "device_info": session_data.device_info,
-            "raw_metrics": [m.dict() for m in session_data.raw_metrics],
-            "classification_stats": classification_stats,
-            "distance_stats": distance_stats,
-            "pupil_asymmetry": float(pupil_asymmetry)
+        # Create result object
+        blink_result = BlinkCountResult(
+            status=TestStatus.COMPLETED,
+            total_blinks=results['total_blinks'],
+            test_seconds=request.duration // 1000  # Convert ms to seconds
+        )
+        
+        # Analyze the results
+        blink_result.analyze()
+        
+        return {
+            "status": "completed",
+            "total_blinks": blink_result.total_blinks,
+            "blinks_per_minute": blink_result.blinks_per_minute,
+            "result": blink_result.result,
+            "total_frames": results['total_frames']
         }
         
-        # Insert into MongoDB
-        result = sessions_collection.insert_one(session)
+    except Exception as e:
+        print(f"Error in blink test: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Session management
+@router.post("/session/create")
+async def create_test_session():
+    """Create a new test session"""
+    try:
+        session = EyeTestSession()
+        
+        # Save to database
+        session_data = session.dict()
+        session_data["_id"] = session.session_id
+        
+        result = sessions_collection.insert_one(session_data)
         if not result.inserted_id:
             raise HTTPException(status_code=500, detail="Failed to create session")
         
-        return session
+        return {
+            "session_id": session.session_id,
+            "message": "Session created successfully"
+        }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/sessions/{session_id}", response_model=EyeTrackingSessionResponse)
-async def get_session(session_id: str):
-    """Retrieve a specific eye tracking session"""
+@router.get("/session/{session_id}")
+async def get_test_session(session_id: str):
+    """Get a test session"""
     try:
-        session = sessions_collection.find_one({"_id": session_id})
-        if not session:
+        session_data = sessions_collection.find_one({"_id": session_id})
+        if not session_data:
             raise HTTPException(status_code=404, detail="Session not found")
-        return session
+        
+        return session_data
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/sessions/{session_id}/finalize")
-async def finalize_session(session_id: str):
-    """Mark a session as complete and calculate final duration"""
+@router.post("/session/{session_id}/update-ear")
+async def update_ear_results(session_id: str, ear_data: dict):
+    """Update ear test results in session"""
     try:
-        end_time = datetime.now(timezone.utc)
+        # Create proper ear result object
+        ear_result = EarDetectionResult(
+            status=TestStatus.COMPLETED,
+            left_ear_score=ear_data.get("left_ear_score", 0.0),
+            right_ear_score=ear_data.get("right_ear_score", 0.0),
+            face_detected=ear_data.get("face_detected", False),
+            distance_cm=ear_data.get("distance_cm", 60.0),
+            result=ear_data.get("result", "No result")
+        )
         
-        # Get session to calculate duration
-        session = sessions_collection.find_one({"_id": session_id})
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-        
-        duration_sec = (end_time - session["start_time"]).total_seconds()
-        
-        # Update session in database
         result = sessions_collection.update_one(
             {"_id": session_id},
-            {"$set": {
-                "end_time": end_time,
-                "duration_sec": duration_sec
-            }}
+            {"$set": {"ear_test": ear_result.dict()}}
         )
         
         if result.modified_count == 0:
-            raise HTTPException(status_code=500, detail="Failed to finalize session")
+            raise HTTPException(status_code=404, detail="Session not found")
         
-        return {"message": "Session finalized", "duration_sec": duration_sec}
+        return {"message": "Ear test results updated"}
+        
     except Exception as e:
+        print(f"Error updating ear results: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/sessions", response_model=List[EyeTrackingSessionResponse])
-async def list_sessions():
-    """List all eye tracking sessions"""
+@router.post("/session/{session_id}/update-pupil")
+async def update_pupil_results(session_id: str, pupil_data: dict):
+    """Update pupil test results in session"""
     try:
-        sessions = list(sessions_collection.find())
-        return sessions
+        # Create proper pupil result object
+        pupil_result = PupilDilationResult(
+            status=TestStatus.COMPLETED,
+            left_pupil_mm=pupil_data.get("left_pupil_mm", 3.5),
+            right_pupil_mm=pupil_data.get("right_pupil_mm", 3.5),
+            result=pupil_data.get("result", "No result")
+        )
+        
+        result = sessions_collection.update_one(
+            {"_id": session_id},
+            {"$set": {"pupil_test": pupil_result.dict()}}
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        return {"message": "Pupil test results updated"}
+        
     except Exception as e:
+        print(f"Error updating pupil results: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/analyze-metrics")
-async def analyze_metrics(metrics: List[EyeMetricSnapshot]):
-    """Analyze a set of eye metrics without creating a session"""
+    
+@router.post("/session/{session_id}/update-blink")
+async def update_blink_results(session_id: str, blink_data: dict):
+    """Update blink test results in session"""
     try:
-        if not metrics:
-            raise HTTPException(status_code=400, detail="No metrics provided")
+        # Create proper blink result object
+        blink_result = BlinkCountResult(
+            status=TestStatus.COMPLETED,
+            total_blinks=blink_data.get("total_blinks", 0),
+            blinks_per_minute=blink_data.get("blinks_per_minute", 0.0),
+            test_seconds=10,
+            result=blink_data.get("result", "No result")
+        )
         
-        # Calculate basic statistics
-        left_ear_avg = np.mean([m.ear_left for m in metrics])
-        right_ear_avg = np.mean([m.ear_right for m in metrics])
-        asymmetry = abs(left_ear_avg - right_ear_avg)
+        result = sessions_collection.update_one(
+            {"_id": session_id},
+            {"$set": {"blink_test": blink_result.dict()}}
+        )
         
-        # Determine most common alert status
-        status_counts = {status: 0 for status in AlertStatus}
-        for metric in metrics:
-            status_counts[metric.alert_status] += 1
-        dominant_status = max(status_counts.items(), key=lambda x: x[1])[0]
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        return {"message": "Blink test results updated"}
+        
+    except Exception as e:
+        print(f"Error updating blink results: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@router.post("/session/{session_id}/finalize")
+async def finalize_test_session(session_id: str):
+    """Calculate final results for all tests"""
+    try:
+        # Get session data
+        session_data = sessions_collection.find_one({"_id": session_id})
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Remove MongoDB _id field for Pydantic model
+        session_data.pop("_id", None)
+        
+        # Create session object from data - handle missing fields gracefully
+        try:
+            session = EyeTestSession(**session_data)
+        except Exception as model_error:
+            # If model creation fails, create a new session and populate it manually
+            print(f"Model creation error: {model_error}")
+            session = EyeTestSession(session_id=session_id)
+            
+            # Manually populate test results from session data
+            if "ear_test" in session_data:
+                ear_data = session_data["ear_test"]
+                session.ear_test = EarDetectionResult(
+                    status=TestStatus.COMPLETED,
+                    left_ear_score=ear_data.get("left_ear_score", 0.0),
+                    right_ear_score=ear_data.get("right_ear_score", 0.0),
+                    face_detected=ear_data.get("face_detected", False),
+                    distance_cm=ear_data.get("distance_cm", 60.0),
+                    result=ear_data.get("result", "No result")
+                )
+            
+            if "pupil_test" in session_data:
+                pupil_data = session_data["pupil_test"]
+                session.pupil_test = PupilDilationResult(
+                    status=TestStatus.COMPLETED,
+                    left_pupil_mm=pupil_data.get("left_pupil_mm", 3.5),
+                    right_pupil_mm=pupil_data.get("right_pupil_mm", 3.5),
+                    result=pupil_data.get("result", "No result")
+                )
+            
+            if "blink_test" in session_data:
+                blink_data = session_data["blink_test"]
+                session.blink_test = BlinkCountResult(
+                    status=TestStatus.COMPLETED,
+                    total_blinks=blink_data.get("total_blinks", 0),
+                    blinks_per_minute=blink_data.get("blinks_per_minute", 0.0),
+                    test_seconds=10,
+                    result=blink_data.get("result", "No result")
+                )
+        
+        # Calculate final results
+        session.calculate_final_result()
+        session.end_time = datetime.now(timezone.utc)
+        
+        # Update in database
+        sessions_collection.update_one(
+            {"_id": session_id},
+            {"$set": {
+                "final_status": session.final_status.value,
+                "confidence": session.confidence,
+                "summary": session.summary,
+                "recommendations": session.recommendations,
+                "end_time": session.end_time
+            }}
+        )
         
         return {
-            "ear_left_avg": left_ear_avg,
-            "ear_right_avg": right_ear_avg,
-            "asymmetry": asymmetry,
-            "dominant_status": dominant_status,
-            "status_distribution": status_counts
+            "final_status": session.final_status.value,
+            "confidence": session.confidence,
+            "summary": session.summary,
+            "recommendations": session.recommendations
         }
+        
+    except Exception as e:
+        print(f"Error in finalize_test_session: {e}")
+        raise HTTPException(status_code=500, detail=f"Error finalizing session: {str(e)}")
+# Simple health check
+@router.get("/health")
+async def health_check():
+    """Check if the API is working"""
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc)}
+
+# Get all sessions
+@router.get("/sessions")
+async def list_all_sessions():
+    """Get list of all test sessions"""
+    try:
+        sessions = list(sessions_collection.find())
+        return {"sessions": sessions, "total": len(sessions)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

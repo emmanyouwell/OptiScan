@@ -1,126 +1,205 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import JSONResponse
-from utils.mediapipe_eye_tracking import MediaPipeEyeTracker
-import json
-import logging
-from datetime import datetime
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from typing import List, Dict, Any
+import cv2
+import numpy as np
+import base64
+from io import BytesIO
+from PIL import Image
+import mediapipe as mp
 
-logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Initialize eye tracker
-eye_tracker = MediaPipeEyeTracker()
+class FrameData(BaseModel):
+    image: str
+    timestamp: int
+    frameIndex: int
 
-@router.websocket("/ws/eye-tracking")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    metrics_history = []
+class EyeTrackingRequest(BaseModel):
+    frames: List[FrameData]
+    testType: str
+    duration: int
+
+class AnalysisRequest(BaseModel):
+    earDetection: Dict[str, Any]
+    pupilDilation: Dict[str, Any]
+    blinkCount: Dict[str, Any]
+
+class EyeTrackingProcessor:
+    def __init__(self):
+        self.mp_face_mesh = mp.solutions.face_mesh
+        self.face_mesh = self.mp_face_mesh.FaceMesh(
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
     
-    try:
-        while True:
-            # Receive image data from frontend
-            data = await websocket.receive_text()
-            message = json.loads(data)
-            
-            # Decode and process frame
-            frame = eye_tracker.decode_image(message['image'])
-            if frame is not None:
-                # Process frame
-                metrics = eye_tracker.process_frame(frame)
-                metrics['timestamp'] = datetime.now().isoformat()
-                metrics_history.append(metrics)
+    def decode_frame(self, image_data: str):
+        """Decode base64 image to OpenCV format"""
+        image_bytes = base64.b64decode(image_data.split(',')[1])
+        image = Image.open(BytesIO(image_bytes))
+        return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+    
+    def detect_ears(self, frames: List[FrameData]):
+        """Process frames for ear detection"""
+        detected_frames = 0
+        left_ear_count = 0
+        right_ear_count = 0
+        
+        for frame_data in frames:
+            try:
+                frame = self.decode_frame(frame_data.image)
+                results = self.face_mesh.process(frame)
                 
-                # Keep only last 100 frames for analysis
-                if len(metrics_history) > 100:
-                    metrics_history = metrics_history[-100:]
+                if results.multi_face_landmarks:
+                    detected_frames += 1
+                    landmarks = results.multi_face_landmarks[0]
+                    
+                    # Check for ear landmarks (simplified detection)
+                    # You can implement more sophisticated ear detection here
+                    left_ear_count += 1  # Placeholder
+                    right_ear_count += 1  # Placeholder
+                    
+            except Exception as e:
+                print(f"Error processing frame: {e}")
+                continue
+        
+        return {
+            "left_ear_detected": left_ear_count > len(frames) * 0.5,
+            "right_ear_detected": right_ear_count > len(frames) * 0.5,
+            "face_detected": detected_frames > 0,
+            "face_position": "center" if detected_frames > len(frames) * 0.7 else "off-center",
+            "detection_rate": detected_frames / len(frames) if frames else 0
+        }
+    
+    def measure_pupil_dilation(self, frames: List[FrameData]):
+        """Process frames for pupil dilation measurement"""
+        left_pupil_sizes = []
+        right_pupil_sizes = []
+        
+        for frame_data in frames:
+            try:
+                frame = self.decode_frame(frame_data.image)
+                results = self.face_mesh.process(frame)
                 
-                # Analyze metrics
-                analysis = eye_tracker.analyze_metrics(metrics_history[-50:])
+                if results.multi_face_landmarks:
+                    # Extract pupil measurements (placeholder implementation)
+                    # You'll need to implement actual pupil detection here
+                    left_pupil_sizes.append(0.5)  # Placeholder
+                    right_pupil_sizes.append(0.5)  # Placeholder
+                    
+            except Exception as e:
+                print(f"Error processing frame: {e}")
+                continue
+        
+        avg_left = np.mean(left_pupil_sizes) if left_pupil_sizes else 0
+        avg_right = np.mean(right_pupil_sizes) if right_pupil_sizes else 0
+        
+        return {
+            "avg_left_pupil": avg_left,
+            "avg_right_pupil": avg_right,
+            "pupil_variation": np.std(left_pupil_sizes + right_pupil_sizes) if left_pupil_sizes or right_pupil_sizes else 0,
+            "pattern": "normal" if avg_left > 0.3 and avg_right > 0.3 else "abnormal"
+        }
+    
+    def count_blinks(self, frames: List[FrameData]):
+        """Process frames for blink counting"""
+        blink_count = 0
+        ear_values = []
+        
+        for frame_data in frames:
+            try:
+                frame = self.decode_frame(frame_data.image)
+                results = self.face_mesh.process(frame)
                 
-                # Send response back to frontend
-                response = {
-                    'current_metrics': metrics,
-                    'analysis': analysis,
-                    'history_count': len(metrics_history)
-                }
-                
-                await websocket.send_text(json.dumps(response))
-            
-    except WebSocketDisconnect:
-        logger.info("WebSocket client disconnected")
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        await websocket.close()
+                if results.multi_face_landmarks:
+                    # Calculate EAR and detect blinks
+                    # This is a simplified implementation
+                    ear = 0.3  # Placeholder EAR calculation
+                    ear_values.append(ear)
+                    
+                    # Simple blink detection (EAR threshold)
+                    if len(ear_values) > 1 and ear_values[-2] > 0.25 and ear < 0.2:
+                        blink_count += 1
+                    
+            except Exception as e:
+                print(f"Error processing frame: {e}")
+                continue
+        
+        duration_minutes = len(frames) * 0.1 / 60  # Assuming 100ms per frame
+        blink_rate = blink_count / duration_minutes if duration_minutes > 0 else 0
+        
+        return {
+            "total_blinks": blink_count,
+            "blink_rate": blink_rate,
+            "pattern": "normal" if 10 <= blink_rate <= 30 else "abnormal"
+        }
 
-@router.post("/analyze-batch")
-async def analyze_batch_data(data: Dict[str, Any]):
-    """Analyze a batch of eye tracking data"""
+processor = EyeTrackingProcessor()
+
+@router.post("/eye-tracking/ear-detection")
+async def ear_detection_test(request: EyeTrackingRequest):
     try:
-        metrics_history = data.get('metrics', [])
+        result = processor.detect_ears(request.frames)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/eye-tracking/pupil-dilation")
+async def pupil_dilation_test(request: EyeTrackingRequest):
+    try:
+        result = processor.measure_pupil_dilation(request.frames)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/eye-tracking/blink-count")
+async def blink_count_test(request: EyeTrackingRequest):
+    try:
+        result = processor.count_blinks(request.frames)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/eye-tracking/analyze")
+async def generate_analysis(request: AnalysisRequest):
+    try:
+        # Combine all test results for final analysis
+        ear_detection = request.earDetection
+        pupil_dilation = request.pupilDilation
+        blink_count = request.blinkCount
         
-        if not metrics_history:
-            raise HTTPException(status_code=400, detail="No metrics data provided")
+        # Simple analysis logic (you can make this more sophisticated)
+        overall_status = "Normal"
+        confidence = 85.0
+        recommendations = []
         
-        # Analyze the data
-        analysis = eye_tracker.analyze_metrics(metrics_history)
+        # Check ear detection
+        if not (ear_detection.get("left_ear_detected") and ear_detection.get("right_ear_detected")):
+            overall_status = "Poor positioning"
+            confidence -= 20
+            recommendations.append("Ensure proper positioning facing the camera")
         
-        # Calculate additional statistics
-        valid_metrics = [m for m in metrics_history if m.get('detected', False)]
+        # Check pupil patterns
+        if pupil_dilation.get("pattern") == "abnormal":
+            overall_status = "Abnormal pupil response"
+            confidence -= 15
+            recommendations.append("Consult with medical professional about pupil response")
         
-        if valid_metrics:
-            avg_left_ear = sum(m['left_ear'] for m in valid_metrics) / len(valid_metrics)
-            avg_right_ear = sum(m['right_ear'] for m in valid_metrics) / len(valid_metrics)
-            avg_left_pupil = sum(m['left_pupil'] for m in valid_metrics) / len(valid_metrics)
-            avg_right_pupil = sum(m['right_pupil'] for m in valid_metrics) / len(valid_metrics)
-            
-            stats = {
-                'avg_left_ear': avg_left_ear,
-                'avg_right_ear': avg_right_ear,
-                'avg_left_pupil': avg_left_pupil,
-                'avg_right_pupil': avg_right_pupil,
-                'detection_rate': len(valid_metrics) / len(metrics_history),
-                'total_frames': len(metrics_history)
-            }
-        else:
-            stats = {
-                'avg_left_ear': 0, 'avg_right_ear': 0,
-                'avg_left_pupil': 0, 'avg_right_pupil': 0,
-                'detection_rate': 0, 'total_frames': len(metrics_history)
-            }
+        # Check blink patterns
+        blink_rate = blink_count.get("blink_rate", 15)
+        if blink_rate < 10 or blink_rate > 30:
+            overall_status = "Abnormal blink pattern"
+            confidence -= 10
+            recommendations.append("Monitor blink patterns - may indicate neurological changes")
         
-        return JSONResponse({
-            'status': analysis,
-            'statistics': stats,
-            'recommendations': get_recommendations(analysis)
-        })
+        return {
+            "overall_status": overall_status,
+            "confidence": max(confidence, 50.0),
+            "detailed_analysis": f"Analysis based on ear detection, pupil dilation, and blink patterns. Blink rate: {blink_rate:.1f}/min",
+            "recommendations": recommendations if recommendations else ["Continue regular monitoring", "Maintain good lighting conditions"]
+        }
         
     except Exception as e:
-        logger.error(f"Error in batch analysis: {e}")
-        raise HTTPException(status_code=500, detail="Analysis failed")
-
-def get_recommendations(status: str) -> List[str]:
-    """Get recommendations based on analysis status"""
-    recommendations = {
-        'Normal': [
-            'Continue regular eye health checkups',
-            'Maintain good screen time habits',
-            'Take regular breaks from screen work'
-        ],
-        'Opioid': [
-            'Consult healthcare provider about medication effects',
-            'Monitor for other symptoms',
-            'Consider alternative pain management if applicable'
-        ],
-        'Stimulant': [
-            'Monitor caffeine intake',
-            'Ensure adequate rest and sleep',
-            'Consider reducing stimulant consumption'
-        ],
-        'Neurological': [
-            'Seek immediate neurological evaluation',
-            'Monitor symptoms closely',
-            'Keep detailed symptom log'
-        ]
-    }
-    return recommendations.get(status, ['Consult healthcare provider for further evaluation'])
+        raise HTTPException(status_code=500, detail=str(e))
