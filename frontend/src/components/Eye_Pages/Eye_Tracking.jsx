@@ -1,7 +1,15 @@
 import React, { useRef, useState, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import axios from 'axios';
-import '../../CSS/Eye_Tracking.css'; 
+import '../../CSS/Eye_Tracking.css';
+import { 
+  analyzeLighting, 
+  analyzeDistance, 
+  validateEnvironment,
+  getEnvironmentStatusColor,
+  getStatusColor,
+  validateTestConditions
+} from '../utils/Eye_Track';
 
 export default function EyeTrackingAnalysis() {
   const webcamRef = useRef(null);
@@ -68,7 +76,7 @@ export default function EyeTrackingAnalysis() {
     };
   }, [currentStep]);
 
-  // Environment validation functions
+  // Environment validation functions - now using utilities
   const checkEnvironmentConditions = async () => {
     if (!webcamRef.current) return;
     
@@ -88,151 +96,18 @@ export default function EyeTrackingAnalysis() {
         // Get image data for analysis
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         
-        // Check lighting conditions
+        // Use utility functions for analysis
         const lightingResult = analyzeLighting(imageData);
-        
-        // Check face/distance (simplified - in real app you'd use face detection)
         const distanceResult = analyzeDistance(imageData, canvas.width, canvas.height);
         
-        // Update environment state
-        setEnvironmentCheck({
-          distance: distanceResult,
-          lighting: lightingResult,
-          faceDetected: distanceResult.status !== 'no_face',
-          isValidEnvironment: lightingResult.status === 'optimal' && 
-                           (distanceResult.status === 'optimal' || distanceResult.status === 'good')
-        });
+        // Validate environment using utility
+        const environmentResult = validateEnvironment(lightingResult, distanceResult);
+        setEnvironmentCheck(environmentResult);
       };
       img.src = screenshot;
       
     } catch (error) {
       console.error('Error checking environment:', error);
-    }
-  };
-
-  const analyzeLighting = (imageData) => {
-    const data = imageData.data;
-    let totalBrightness = 0;
-    let pixelCount = 0;
-    
-    // Calculate average brightness
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      // Calculate brightness using luminance formula
-      const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
-      totalBrightness += brightness;
-      pixelCount++;
-    }
-    
-    const avgBrightness = totalBrightness / pixelCount;
-    
-    // Determine lighting status
-    if (avgBrightness < 50) {
-      return {
-        status: 'too_dark',
-        value: avgBrightness,
-        message: '⚠️ Too dark - Please increase lighting or move to brighter area'
-      };
-    } else if (avgBrightness > 200) {
-      return {
-        status: 'too_bright',
-        value: avgBrightness,
-        message: '⚠️ Too bright - Please reduce lighting or avoid direct light'
-      };
-    } else if (avgBrightness >= 80 && avgBrightness <= 160) {
-      return {
-        status: 'optimal',
-        value: avgBrightness,
-        message: '✅ Lighting is optimal for analysis'
-      };
-    } else {
-      return {
-        status: 'acceptable',
-        value: avgBrightness,
-        message: '⚡ Lighting is acceptable but could be improved'
-      };
-    }
-  };
-
-  const analyzeDistance = (imageData, width, height) => {
-    // Simplified face size detection (in real app, use proper face detection)
-    const data = imageData.data;
-    let facePixels = 0;
-    
-    // Look for skin-tone pixels in center region (simplified)
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const searchRadius = Math.min(width, height) / 4;
-    
-    for (let y = centerY - searchRadius; y < centerY + searchRadius; y++) {
-      for (let x = centerX - searchRadius; x < centerX + searchRadius; x++) {
-        if (x >= 0 && x < width && y >= 0 && y < height) {
-          const i = (y * width + x) * 4;
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          
-          // Simple skin tone detection
-          if (r > 95 && g > 40 && b > 20 && 
-              Math.max(r, g, b) - Math.min(r, g, b) > 15 &&
-              Math.abs(r - g) > 15 && r > g && r > b) {
-            facePixels++;
-          }
-        }
-      }
-    }
-    
-    // Calculate face percentage
-    const totalSearchPixels = (searchRadius * 2) * (searchRadius * 2);
-    const facePercentage = (facePixels / totalSearchPixels) * 100;
-    
-    // Estimate distance based on face size
-    if (facePercentage < 5) {
-      return {
-        status: 'too_far',
-        value: facePercentage,
-        message: '⚠️ Too far - Please move closer to the camera (50-70cm recommended)'
-      };
-    } else if (facePercentage > 40) {
-      return {
-        status: 'too_close',
-        value: facePercentage,
-        message: '⚠️ Too close - Please move away from the camera'
-      };
-    } else if (facePercentage >= 15 && facePercentage <= 30) {
-      return {
-        status: 'optimal',
-        value: facePercentage,
-        message: '✅ Distance is optimal for analysis'
-      };
-    } else if (facePercentage >= 10 && facePercentage <= 35) {
-      return {
-        status: 'good',
-        value: facePercentage,
-        message: '⚡ Distance is acceptable'
-      };
-    } else {
-      return {
-        status: 'no_face',
-        value: facePercentage,
-        message: '❌ No face detected - Please position your face in the camera'
-      };
-    }
-  };
-
-  const getEnvironmentStatusColor = (status) => {
-    switch (status) {
-      case 'optimal': return '#4CAF50';
-      case 'good':
-      case 'acceptable': return '#FF9800';
-      case 'too_dark':
-      case 'too_bright':
-      case 'too_close':
-      case 'too_far': return '#F44336';
-      case 'no_face': return '#9E9E9E';
-      default: return '#757575';
     }
   };
 
@@ -248,16 +123,17 @@ export default function EyeTrackingAnalysis() {
     }
   };
 
-  // Capture and send frame for processing
+  // Capture and send frame for processing - updated to use validation utility
   const captureAndAnalyze = async (testType, duration = 5000) => {
     if (!webcamRef.current) {
       setError('Camera not available');
       return null;
     }
 
-    // Check environment before starting test
-    if (!environmentCheck.isValidEnvironment) {
-      setError('Please ensure optimal lighting and distance before starting the test');
+    // Use validation utility for test conditions
+    const validation = validateTestConditions(environmentCheck);
+    if (!validation.isValid) {
+      setError(validation.errors[0]); // Show first error
       return null;
     }
 
@@ -503,17 +379,6 @@ export default function EyeTrackingAnalysis() {
     a.download = `eye_tracking_analysis_${sessionId || Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  };
-
-  const getStatusColor = (status) => {
-    if (!status) return '#757575';
-    switch (status.toLowerCase()) {
-      case 'normal': return '#4CAF50';
-      case 'opioid': return '#FF9800';
-      case 'stimulant': return '#F44336';
-      case 'neurological': return '#9C27B0';
-      default: return '#757575';
-    }
   };
 
   return (
