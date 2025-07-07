@@ -1,254 +1,328 @@
 import React, { useRef, useState, useEffect } from 'react';
 import Webcam from 'react-webcam';
-import * as faceapi from 'face-api.js';
+import '../../CSS/Eye_Tracking.css'; 
 
 export default function EyeTrackingAnalysis() {
   const webcamRef = useRef(null);
-  const [isModelLoading, setIsModelLoading] = useState(true);
-  const [currentTest, setCurrentTest] = useState('leftEAR'); // leftEAR, rightEAR, pupils, blinkRate, analysis
-  const [testResults, setTestResults] = useState({
-    leftEAR: [],
-    rightEAR: [],
-    leftPupil: [],
-    rightPupil: [],
-    blinkRate: 0
-  });
+  const [socket, setSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
   const [currentMetrics, setCurrentMetrics] = useState({
-    leftEAR: 0,
-    rightEAR: 0,
-    leftPupil: 0,
-    rightPupil: 0
+    left_ear: 0,
+    right_ear: 0,
+    left_pupil: 0,
+    right_pupil: 0,
+    detected: false
   });
-  const [isTesting, setIsTesting] = useState(false);
-  const [testDuration, setTestDuration] = useState(10); // seconds per test
-  const [timeRemaining, setTimeRemaining] = useState(testDuration);
+  const [analysis, setAnalysis] = useState('Normal');
+  const [isTracking, setIsTracking] = useState(false);
+  const [metricsHistory, setMetricsHistory] = useState([]);
+  const [sessionStats, setSessionStats] = useState({
+    totalFrames: 0,
+    detectionRate: 0,
+    avgLeftEAR: 0,
+    avgRightEAR: 0,
+    avgLeftPupil: 0,
+    avgRightPupil: 0
+  });
+  const [error, setError] = useState('');
 
-  // Load face-api.js models
+  // Initialize WebSocket connection
   useEffect(() => {
-    const loadModels = async () => {
-      await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
-      await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
-      setIsModelLoading(false);
+    const connectWebSocket = () => {
+      try {
+        const ws = new WebSocket('ws://localhost:8000/api/mediapipe/ws/eye-tracking');
+        
+        ws.onopen = () => {
+          console.log('Connected to MediaPipe eye tracking service');
+          setSocket(ws);
+          setIsConnected(true);
+          setError('');
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            setCurrentMetrics(data.current_metrics);
+            setAnalysis(data.analysis);
+            
+            // Update metrics history for local display
+            if (data.current_metrics.detected) {
+              setMetricsHistory(prev => {
+                const newHistory = [...prev, data.current_metrics].slice(-100); // Keep last 100
+                updateSessionStats(newHistory);
+                return newHistory;
+              });
+            }
+          } catch (err) {
+            console.error('Error parsing WebSocket message:', err);
+          }
+        };
+        
+        ws.onclose = () => {
+          console.log('Disconnected from eye tracking service');
+          setSocket(null);
+          setIsConnected(false);
+          
+          // Try to reconnect after 3 seconds
+          setTimeout(connectWebSocket, 3000);
+        };
+        
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          setError('Connection error. Please check if the backend is running.');
+        };
+        
+        setSocket(ws);
+      } catch (err) {
+        console.error('Failed to create WebSocket connection:', err);
+        setError('Failed to connect to backend service.');
+      }
     };
-    loadModels();
+    
+    connectWebSocket();
+    
+    return () => {
+      if (socket) {
+        socket.close();
+      }
+    };
   }, []);
 
-  // Handle test timer
-  useEffect(() => {
-    let timer;
-    if (isTesting && timeRemaining > 0) {
-      timer = setInterval(() => {
-        setTimeRemaining(prev => prev - 1);
-      }, 1000);
-    } else if (timeRemaining === 0) {
-      finishTest();
-    }
-    return () => clearInterval(timer);
-  }, [isTesting, timeRemaining]);
-
-  // Process each frame during tests
+  // Send frames to MediaPipe backend
   useEffect(() => {
     let interval;
-    if (isTesting && !isModelLoading) {
-      interval = setInterval(async () => {
-        if (webcamRef.current) {
-          const image = webcamRef.current.getScreenshot();
-          const img = await faceapi.fetchImage(image);
-          const detections = await faceapi.detectAllFaces(img, new faceapi.TinyFaceDetectorOptions())
-            .withFaceLandmarks();
-          
-          if (detections.length > 0) {
-            const landmarks = detections[0].landmarks;
-            const leftEye = landmarks.getLeftEye();
-            const rightEye = landmarks.getRightEye();
-            
-            const leftEAR = calculateEAR(leftEye);
-            const rightEAR = calculateEAR(rightEye);
-            const leftPupil = estimatePupilSize(leftEye);
-            const rightPupil = estimatePupilSize(rightEye);
-            
-            setCurrentMetrics({
-              leftEAR,
-              rightEAR,
-              leftPupil,
-              rightPupil
-            });
-
-            // Record metrics based on current test
-            if (currentTest === 'leftEAR') {
-              setTestResults(prev => ({
-                ...prev,
-                leftEAR: [...prev.leftEAR, leftEAR]
-              }));
-            } else if (currentTest === 'rightEAR') {
-              setTestResults(prev => ({
-                ...prev,
-                rightEAR: [...prev.rightEAR, rightEAR]
-              }));
-            } else if (currentTest === 'pupils') {
-              setTestResults(prev => ({
-                ...prev,
-                leftPupil: [...prev.leftPupil, leftPupil],
-                rightPupil: [...prev.rightPupil, rightPupil]
-              }));
-            }
-          }
-        }
-      }, 200); // Process every 200ms
-    }
-    return () => clearInterval(interval);
-  }, [isTesting, isModelLoading, currentTest]);
-
-  const calculateEAR = (eye) => {
-    const A = faceapi.euclideanDistance(eye[1], eye[5]);
-    const B = faceapi.euclideanDistance(eye[2], eye[4]);
-    const C = faceapi.euclideanDistance(eye[0], eye[3]);
-    return (A + B) / (2 * C);
-  };
-
-  const estimatePupilSize = (eye) => {
-    const eyeWidth = faceapi.euclideanDistance(eye[0], eye[3]);
-    return eyeWidth * 0.3;
-  };
-
-  const startTest = (testType) => {
-    setCurrentTest(testType);
-    setIsTesting(true);
-    setTimeRemaining(testDuration);
-  };
-
-  const finishTest = () => {
-    setIsTesting(false);
-    setTimeRemaining(testDuration);
     
-    // Auto-advance to next test or analysis
-    if (currentTest === 'leftEAR') {
-      setCurrentTest('rightEAR');
-    } else if (currentTest === 'rightEAR') {
-      setCurrentTest('pupils');
-    } else if (currentTest === 'pupils') {
-      setCurrentTest('blinkRate');
-    } else {
-      setCurrentTest('analysis');
+    if (isTracking && socket && isConnected && webcamRef.current) {
+      interval = setInterval(() => {
+        try {
+          const screenshot = webcamRef.current.getScreenshot();
+          if (screenshot && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+              image: screenshot,
+              timestamp: Date.now()
+            }));
+          }
+        } catch (err) {
+          console.error('Error sending frame:', err);
+        }
+      }, 100); // Send frame every 100ms (10 FPS)
+    }
+    
+    return () => clearInterval(interval);
+  }, [isTracking, socket, isConnected]);
+
+  const updateSessionStats = (history) => {
+    const validMetrics = history.filter(m => m.detected);
+    
+    if (validMetrics.length > 0) {
+      setSessionStats({
+        totalFrames: history.length,
+        detectionRate: (validMetrics.length / history.length) * 100,
+        avgLeftEAR: validMetrics.reduce((sum, m) => sum + m.left_ear, 0) / validMetrics.length,
+        avgRightEAR: validMetrics.reduce((sum, m) => sum + m.right_ear, 0) / validMetrics.length,
+        avgLeftPupil: validMetrics.reduce((sum, m) => sum + m.left_pupil, 0) / validMetrics.length,
+        avgRightPupil: validMetrics.reduce((sum, m) => sum + m.right_pupil, 0) / validMetrics.length,
+      });
     }
   };
 
-  const renderTestControls = () => {
-    if (currentTest === 'analysis') {
-      return <AnalysisResults results={testResults} />;
+  const startTracking = () => {
+    if (!isConnected) {
+      setError('Not connected to backend service');
+      return;
     }
-
-    return (
-      <div className="test-controls">
-        <h2>{getTestTitle(currentTest)} Test</h2>
-        {isTesting ? (
-          <>
-            <p>Testing in progress... {timeRemaining}s remaining</p>
-            <button onClick={() => setIsTesting(false)}>Stop Test</button>
-          </>
-        ) : (
-          <button onClick={() => startTest(currentTest)}>Start {getTestTitle(currentTest)} Test</button>
-        )}
-      </div>
-    );
+    setIsTracking(true);
+    setMetricsHistory([]);
+    setError('');
   };
 
-  const getTestTitle = (test) => {
-    switch(test) {
-      case 'leftEAR': return 'Left EAR';
-      case 'rightEAR': return 'Right EAR';
-      case 'pupils': return 'Pupil Dilation';
-      case 'blinkRate': return 'Blink Rate';
-      default: return 'Analysis';
+  const stopTracking = () => {
+    setIsTracking(false);
+  };
+
+  const resetSession = () => {
+    setMetricsHistory([]);
+    setCurrentMetrics({
+      left_ear: 0,
+      right_ear: 0,
+      left_pupil: 0,
+      right_pupil: 0,
+      detected: false
+    });
+    setAnalysis('Normal');
+    setSessionStats({
+      totalFrames: 0,
+      detectionRate: 0,
+      avgLeftEAR: 0,
+      avgRightEAR: 0,
+      avgLeftPupil: 0,
+      avgRightPupil: 0
+    });
+  };
+
+  const getStatusColor = (status) => {
+    switch (status.toLowerCase()) {
+      case 'normal': return '#4CAF50';
+      case 'opioid': return '#FF9800';
+      case 'stimulant': return '#F44336';
+      case 'neurological': return '#9C27B0';
+      default: return '#757575';
     }
+  };
+
+  const downloadResults = () => {
+    const results = {
+      session_stats: sessionStats,
+      current_analysis: analysis,
+      metrics_history: metricsHistory,
+      timestamp: new Date().toISOString()
+    };
+    
+    const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `eye_tracking_results_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
     <div className="eye-tracking-analysis">
-      <h1>Eye Tracking Analysis</h1>
-      
-      <div className="webcam-container">
-        <Webcam
-          ref={webcamRef}
-          audio={false}
-          screenshotFormat="image/jpeg"
-          videoConstraints={{
-            width: 640,
-            height: 480,
-            facingMode: "user"
-          }}
-        />
+      <div className="header">
+        <h1>MediaPipe Eye Tracking Analysis</h1>
+        <div className="connection-status">
+          <span className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}>
+            {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+          </span>
+        </div>
       </div>
       
-      {isModelLoading ? (
-        <div>Loading face detection models...</div>
-      ) : (
-        <>
-          <div className="current-metrics">
-            <h3>Current Measurements</h3>
-            <p>Left EAR: {currentMetrics.leftEAR.toFixed(3)}</p>
-            <p>Right EAR: {currentMetrics.rightEAR.toFixed(3)}</p>
-            <p>Left Pupil: {currentMetrics.leftPupil.toFixed(1)}px</p>
-            <p>Right Pupil: {currentMetrics.rightPupil.toFixed(1)}px</p>
-          </div>
-          
-          {renderTestControls()}
-          
-          <div className="test-progress">
-            <h3>Test Sequence</h3>
-            <div className="progress-steps">
-              {['leftEAR', 'rightEAR', 'pupils', 'blinkRate', 'analysis'].map((step) => (
-                <div 
-                  key={step}
-                  className={`step ${currentTest === step ? 'active' : ''}`}
-                >
-                  {getTestTitle(step)}
-                </div>
-              ))}
+      {error && (
+        <div className="error-message">
+          ⚠️ {error}
+        </div>
+      )}
+      
+      <div className="main-content">
+        <div className="webcam-section">
+          <div className="webcam-container">
+            <Webcam
+              ref={webcamRef}
+              audio={false}
+              screenshotFormat="image/jpeg"
+              videoConstraints={{
+                width: 640,
+                height: 480,
+                facingMode: "user"
+              }}
+              className="webcam"
+            />
+            <div className="webcam-overlay">
+              {!currentMetrics.detected && isTracking && (
+                <div className="no-detection">No face detected</div>
+              )}
             </div>
           </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function AnalysisResults({ results }) {
-  // Calculate averages
-  const avgLeftEAR = results.leftEAR.reduce((a, b) => a + b, 0) / results.leftEAR.length;
-  const avgRightEAR = results.rightEAR.reduce((a, b) => a + b, 0) / results.rightEAR.length;
-  const avgLeftPupil = results.leftPupil.reduce((a, b) => a + b, 0) / results.leftPupil.length;
-  const avgRightPupil = results.rightPupil.reduce((a, b) => a + b, 0) / results.rightPupil.length;
-  
-  // Determine status based on your criteria
-  const getStatus = () => {
-    const earDiff = Math.abs(avgLeftEAR - avgRightEAR);
-    const pupilDiff = Math.abs(avgLeftPupil - avgRightPupil);
-    
-    if (earDiff > 0.1) return 'Possible neurological asymmetry';
-    if (avgLeftPupil < 10 || avgRightPupil < 10) return 'Possible opioid effect';
-    if (avgLeftPupil > 25 || avgRightPupil > 25) return 'Possible stimulant effect';
-    return 'Normal eye metrics';
-  };
-
-  return (
-    <div className="analysis-results">
-      <h2>Analysis Results</h2>
-      
-      <div className="metrics-summary">
-        <h3>Average Measurements</h3>
-        <p>Left EAR: {avgLeftEAR.toFixed(3)}</p>
-        <p>Right EAR: {avgRightEAR.toFixed(3)}</p>
-        <p>Left Pupil Size: {avgLeftPupil.toFixed(1)}px</p>
-        <p>Right Pupil Size: {avgRightPupil.toFixed(1)}px</p>
+          
+          <div className="controls">
+            {!isTracking ? (
+              <button 
+                onClick={startTracking} 
+                disabled={!isConnected}
+                className="btn btn-primary"
+              >
+                Start Tracking
+              </button>
+            ) : (
+              <button onClick={stopTracking} className="btn btn-secondary">
+                Stop Tracking
+              </button>
+            )}
+            <button onClick={resetSession} className="btn btn-outline">
+              Reset Session
+            </button>
+            {metricsHistory.length > 0 && (
+              <button onClick={downloadResults} className="btn btn-outline">
+                Download Results
+              </button>
+            )}
+          </div>
+        </div>
+        
+        <div className="metrics-section">
+          <div className="real-time-metrics">
+            <h3>Real-time Metrics</h3>
+            {currentMetrics.detected ? (
+              <div className="metrics-grid">
+                <div className="metric">
+                  <label>Left EAR:</label>
+                  <span>{currentMetrics.left_ear.toFixed(3)}</span>
+                </div>
+                <div className="metric">
+                  <label>Right EAR:</label>
+                  <span>{currentMetrics.right_ear.toFixed(3)}</span>
+                </div>
+                <div className="metric">
+                  <label>Left Pupil:</label>
+                  <span>{currentMetrics.left_pupil.toFixed(3)}</span>
+                </div>
+                <div className="metric">
+                  <label>Right Pupil:</label>
+                  <span>{currentMetrics.right_pupil.toFixed(3)}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="no-data">No face detected</p>
+            )}
+          </div>
+          
+          <div className="analysis-section">
+            <h3>Analysis</h3>
+            <div 
+              className="status-display"
+              style={{ borderColor: getStatusColor(analysis) }}
+            >
+              <span 
+                className="status-text"
+                style={{ color: getStatusColor(analysis) }}
+              >
+                {analysis}
+              </span>
+            </div>
+          </div>
+          
+          <div className="session-stats">
+            <h3>Session Statistics</h3>
+            <div className="stats-grid">
+              <div className="stat">
+                <label>Total Frames:</label>
+                <span>{sessionStats.totalFrames}</span>
+              </div>
+              <div className="stat">
+                <label>Detection Rate:</label>
+                <span>{sessionStats.detectionRate.toFixed(1)}%</span>
+              </div>
+              <div className="stat">
+                <label>Avg Left EAR:</label>
+                <span>{sessionStats.avgLeftEAR.toFixed(3)}</span>
+              </div>
+              <div className="stat">
+                <label>Avg Right EAR:</label>
+                <span>{sessionStats.avgRightEAR.toFixed(3)}</span>
+              </div>
+              <div className="stat">
+                <label>Avg Left Pupil:</label>
+                <span>{sessionStats.avgLeftPupil.toFixed(3)}</span>
+              </div>
+              <div className="stat">
+                <label>Avg Right Pupil:</label>
+                <span>{sessionStats.avgRightPupil.toFixed(3)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      
-      <div className="status-determination">
-        <h3>Analysis</h3>
-        <p className="status">{getStatus()}</p>
-      </div>
-      
-      <button onClick={() => window.location.reload()}>Start New Test</button>
     </div>
   );
 }
