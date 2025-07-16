@@ -6,6 +6,7 @@ models/__pycache__/
 config/__pycache__/
 utils/__pycache__/
 Admin/__pycache__/
+data/
 
 # Ignore shape predictor files
 shape_predictor_68_face_landmarks.dat

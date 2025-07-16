@@ -16,18 +16,13 @@ class IshiharaPlate(BaseModel):
     user_answer: str
     is_correct: bool
 
-class FarnsworthD15Arrangement(BaseModel):
-    arrangement: List[int]  # List of cap indices in the order arranged by the user (0-15)
-    is_correct: bool
-
 class ColorBlindnessTest(BaseModel):
     _id: ObjectId = Field(default_factory=ObjectId, alias="_id")
     user_id: ObjectId
     test_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    plates: Optional[List[IshiharaPlate]] = None
-    farnsworth_d15: Optional[FarnsworthD15Arrangement] = None
+    plates: List[IshiharaPlate]
     suspected_type: ColorBlindnessType
-    confidence: float = Field(..., ge=0, le=1)  # 0-1 scale
+    confidence: float = Field(..., ge=0, le=100)  # 0–100 percent confidence
     device_info: Optional[dict] = None  # {os: str, camera: str}
 
     class Config:
