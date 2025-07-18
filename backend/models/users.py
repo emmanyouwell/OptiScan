@@ -15,6 +15,7 @@ class Role(str, Enum):
 
 class User(BaseModel):
     username: str
+    age: int
     email: str
     password: str
     img_path: Optional[str] = None
