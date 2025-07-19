@@ -3,9 +3,9 @@ import { Platform } from 'react-native'
 
 let baseURL = '';
 
-LOCALHOST
+//LOCALHOST
 {Platform.OS == 'android'
-? baseURL = 'http://192.168.254.115:8081'
+? baseURL = 'http://192.168.254.118:8000'
 : baseURL = 'http://172.20.10.3:8081'
 }
 

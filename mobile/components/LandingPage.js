@@ -2,15 +2,30 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { 
   StyleSheet, 
-  Text, 
   View, 
-  TouchableOpacity, 
-  SafeAreaView,
   Dimensions
 } from 'react-native';
+import {
+  Text,
+  Button,
+  Surface,
+  Provider as PaperProvider,
+  DefaultTheme,
+} from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
+
+// Custom theme
+const theme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: '#3b82f6',
+    accent: '#1d4ed8',
+  },
+};
 
 export default function LandingPage({ navigation }) {
   const handleLogin = () => {
@@ -22,62 +37,75 @@ export default function LandingPage({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" backgroundColor="#1e3a8a" />
-      
-      {/* Header Section with Logo */}
-      <LinearGradient
-        colors={['#1e3a8a', '#3b82f6', '#60a5fa']}
-        style={styles.header}
-      >
-        <View style={styles.logoContainer}>
-          {/* Eye Icon */}
-          <View style={styles.eyeIcon}>
-            <View style={styles.eyeOuter}>
-              <View style={styles.eyeInner}>
-                <View style={styles.pupil} />
+    <PaperProvider theme={theme}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="light" backgroundColor="#1e3a8a" />
+        
+        {/* Header Section with Logo */}
+        <LinearGradient
+          colors={['#1e3a8a', '#3b82f6', '#60a5fa']}
+          style={styles.header}
+        >
+          <View style={styles.logoContainer}>
+            {/* Eye Icon */}
+            <View style={styles.eyeIcon}>
+              <View style={styles.eyeOuter}>
+                <View style={styles.eyeInner}>
+                  <View style={styles.pupil} />
+                </View>
               </View>
             </View>
+            <Text style={styles.logoText}>OptiScan</Text>
+            <Text style={styles.tagline}>Your Vision, Our Technology</Text>
           </View>
-          <Text style={styles.logoText}>OptiScan</Text>
-          <Text style={styles.tagline}>Your Vision, Our Technology</Text>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
 
-      {/* Main Content */}
-      <View style={styles.content}>
-        {/* Welcome Section */}
-        <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeTitle}>Welcome to OptiScan</Text>
-          <Text style={styles.welcomeSubtitle}>
-            Advanced eye scanning technology for better eye health monitoring
-          </Text>
-        </View>
+        {/* Main Content */}
+        <View style={styles.content}>
+          {/* Welcome Section */}
+          <Surface style={styles.welcomeCard} elevation={2}>
+            <Text variant="headlineMedium" style={styles.welcomeTitle}>
+              Welcome to OptiScan
+            </Text>
+            <Text variant="bodyLarge" style={styles.welcomeSubtitle}>
+              Advanced eye scanning technology for better eye health monitoring
+            </Text>
+          </Surface>
 
-        {/* Action Buttons */}
-        <View style={styles.actionSection}>
-          <TouchableOpacity style={styles.primaryButton} onPress={handleRegister}>
-            <LinearGradient
-              colors={['#3b82f6', '#1d4ed8']}
-              style={styles.buttonGradient}
+          {/* Action Buttons */}
+          <View style={styles.actionSection}>
+            <Button
+              mode="contained"
+              onPress={handleRegister}
+              style={styles.primaryButton}
+              contentStyle={styles.primaryButtonContent}
+              labelStyle={styles.primaryButtonText}
+              icon="account-plus"
             >
-              <Text style={styles.primaryButtonText}>Create Account</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+              Create Account
+            </Button>
 
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleLogin}>
-            <Text style={styles.secondaryButtonText}>Sign In</Text>
-          </TouchableOpacity>
-        </View>
+            <Button
+              mode="outlined"
+              onPress={handleLogin}
+              style={styles.secondaryButton}
+              contentStyle={styles.secondaryButtonContent}
+              labelStyle={styles.secondaryButtonText}
+              icon="login"
+            >
+              Sign In
+            </Button>
+          </View>
 
-        {/* Bottom Info */}
-        <View style={styles.bottomSection}>
-          <Text style={styles.bottomText}>
-            Join thousands of users monitoring their eye health
-          </Text>
+          {/* Bottom Info */}
+          <Surface style={styles.bottomCard} elevation={1}>
+            <Text variant="bodyMedium" style={styles.bottomText}>
+              Join thousands of users monitoring their eye health
+            </Text>
+          </Surface>
         </View>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </PaperProvider>
   );
 }
 
@@ -140,36 +168,36 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 30,
+    paddingHorizontal: 20,
     justifyContent: 'space-between',
-    paddingTop: 40,
-    paddingBottom: 40,
+    paddingTop: 30,
+    paddingBottom: 30,
   },
-  welcomeSection: {
+  welcomeCard: {
+    padding: 25,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 30,
   },
   welcomeTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
     color: '#1e40af',
+    fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 15,
   },
   welcomeSubtitle: {
-    fontSize: 16,
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 24,
-    paddingHorizontal: 10,
   },
   actionSection: {
     width: '100%',
     alignItems: 'center',
+    paddingHorizontal: 10,
   },
   primaryButton: {
     width: '100%',
-    height: 56,
     borderRadius: 28,
     marginBottom: 20,
     shadowColor: '#3b82f6',
@@ -178,37 +206,33 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  buttonGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 28,
+  primaryButtonContent: {
+    height: 56,
   },
   primaryButtonText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#ffffff',
   },
   secondaryButton: {
     width: '100%',
-    paddingVertical: 18,
-    paddingHorizontal: 30,
-    borderWidth: 2,
-    borderColor: '#3b82f6',
     borderRadius: 28,
-    alignItems: 'center',
+    borderWidth: 2,
+  },
+  secondaryButtonContent: {
+    height: 56,
   },
   secondaryButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#3b82f6',
   },
-  bottomSection: {
+  bottomCard: {
+    padding: 20,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
-    marginTop: 30,
+    marginTop: 20,
   },
   bottomText: {
-    fontSize: 14,
     color: '#94a3b8',
     textAlign: 'center',
     fontStyle: 'italic',

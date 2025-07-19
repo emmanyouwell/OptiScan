@@ -1,21 +1,41 @@
 import React, { useState } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-  ScrollView,
-  Alert,
-  Image,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Image,
 } from 'react-native';
+import {
+  TextInput,
+  Button,
+  Text,
+  Surface,
+  Snackbar,
+  Provider as PaperProvider,
+  DefaultTheme,
+  Menu,
+  TouchableRipple,
+} from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { Picker } from '@react-native-picker/picker';
+import axios from 'axios';
+import baseURL from '../../assets/common/baseURL';
 
 const { width, height } = Dimensions.get('window');
+
+// Custom theme
+const theme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: '#3b82f6',
+    accent: '#1d4ed8',
+  },
+};
 
 export default function Register({ navigation }) {
   const [formData, setFormData] = useState({
@@ -24,92 +44,91 @@ export default function Register({ navigation }) {
     age: '',
     gender: '',
     password: '',
-    confirmPassword: '',
   });
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [image, setImage] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [errors, setErrors] = useState({});
+  const [genderMenuVisible, setGenderMenuVisible] = useState(false);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
   };
 
+  const showSnackbar = (message) => {
+    setSnackbarMessage(message);
+    setSnackbarVisible(true);
+  };
+
+  // Updated image picker
   const pickImage = async () => {
-    // Request permission
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (permissionResult.granted === false) {
-      Alert.alert('Permission Required', 'Permission to access camera roll is required!');
+    // Request permission to access media library
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showSnackbar('Sorry, we need camera roll permissions to make this work!');
       return;
     }
 
-    // Pick image
-    const result = await ImagePicker.launchImageLibraryAsync({
+    // Launch image library
+    let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
+      aspect: [4, 3],
+      quality: 1,
     });
 
     if (!result.canceled) {
-      setSelectedImage(result.assets[0]);
+      const selectedImageUri = result.assets[0].uri;
+      setImage(selectedImageUri);
     }
   };
 
   const validateForm = () => {
-    const { username, email, age, gender, password, confirmPassword } = formData;
+    const { username, email, age, gender, password } = formData;
+    const newErrors = {};
 
     if (!username.trim()) {
-      Alert.alert('Validation Error', 'Username is required');
-      return false;
+      newErrors.username = 'Username is required';
     }
 
     if (!email.trim()) {
-      Alert.alert('Validation Error', 'Email is required');
-      return false;
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert('Validation Error', 'Please enter a valid email address');
-      return false;
+      newErrors.email = 'Email is required';
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        newErrors.email = 'Please enter a valid email address';
+      }
     }
 
     if (!age.trim()) {
-      Alert.alert('Validation Error', 'Age is required');
-      return false;
-    }
-
-    const ageNumber = parseInt(age);
-    if (isNaN(ageNumber) || ageNumber < 1 || ageNumber > 150) {
-      Alert.alert('Validation Error', 'Please enter a valid age (1-150)');
-      return false;
+      newErrors.age = 'Age is required';
+    } else {
+      const ageNumber = parseInt(age);
+      if (isNaN(ageNumber) || ageNumber < 1 || ageNumber > 150) {
+        newErrors.age = 'Please enter a valid age (1-150)';
+      }
     }
 
     if (!gender) {
-      Alert.alert('Validation Error', 'Please select a gender');
-      return false;
+      newErrors.gender = 'Please select a gender';
     }
 
     if (!password) {
-      Alert.alert('Validation Error', 'Password is required');
-      return false;
+      newErrors.password = 'Password is required';
+    } else if (password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters long';
     }
 
-    if (password.length < 8) {
-      Alert.alert('Validation Error', 'Password must be at least 8 characters long');
-      return false;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Validation Error', 'Passwords do not match');
-      return false;
-    }
-
-    return true;
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleRegister = async () => {
@@ -126,178 +145,265 @@ export default function Register({ navigation }) {
       formDataToSend.append('gender', formData.gender);
       formDataToSend.append('password', formData.password);
 
-      // Add image if selected
-      if (selectedImage) {
+      // Updated image handling
+      if (image) {
+        const uriParts = image.split('.');
+        const fileType = uriParts[uriParts.length - 1];
         formDataToSend.append('img', {
-          uri: selectedImage.uri,
-          type: 'image/jpeg',
-          name: 'profile.jpg',
+          uri: image,
+          name: `photo.${fileType}`,
+          type: `image/${fileType}`,
         });
       }
 
-      // Replace with your actual API endpoint
-      const response = await fetch('http://your-backend-url/users/register', {
-        method: 'POST',
-        body: formDataToSend,
+      const apiURL = `${baseURL}/api/users/register`;
+      console.log('🚀 Sending registration request to:', apiURL);
+
+      // Axios POST request
+      const response = await axios.post(apiURL, formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 30000,
       });
 
-      const result = await response.json();
+      console.log('✅ Registration response:', response.data);
 
-      if (response.ok) {
-        Alert.alert('Success', 'Registration successful!', [
-          { text: 'OK', onPress: () => navigation.navigate('Login') }
-        ]);
-      } else {
-        Alert.alert('Registration Failed', result.detail || 'Something went wrong');
-      }
+      // Success response
+      showSnackbar('Registration successful!');
+      
+      // Clear form
+      setFormData({
+        username: '',
+        email: '',
+        age: '',
+        gender: '',
+        password: '',
+      });
+      setImage(null);
+      
+      // Navigate to login after delay
+      setTimeout(() => {
+        navigation.navigate('Login');
+      }, 2000);
+
     } catch (error) {
-      console.error('Registration error:', error);
-      Alert.alert('Error', 'Network error. Please try again.');
+      console.error('❌ Registration error:', error);
+
+      let errorMessage = 'Registration failed. Please try again.';
+
+      if (error.response) {
+        if (error.response.data?.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.response.status === 400) {
+          errorMessage = 'Invalid input data. Please check your information.';
+        } else if (error.response.status === 500) {
+          errorMessage = 'Server error. Please try again later.';
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else {
+        errorMessage = 'An unexpected error occurred.';
+      }
+
+      showSnackbar(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <LinearGradient
-        colors={['#1e3a8a', '#3b82f6']}
-        style={styles.header}
-      >
-        <Text style={styles.headerTitle}>Create Account</Text>
-        <Text style={styles.headerSubtitle}>Join OptiScan today</Text>
-      </LinearGradient>
-
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.formContainer}>
-          
-          {/* Profile Image */}
-          <View style={styles.imageSection}>
-            <TouchableOpacity onPress={pickImage} style={styles.imagePickerContainer}>
-              {selectedImage ? (
-                <Image source={{ uri: selectedImage.uri }} style={styles.profileImage} />
-              ) : (
-                <View style={styles.placeholderImage}>
-                  <Text style={styles.placeholderText}>📷</Text>
-                  <Text style={styles.placeholderLabel}>Add Photo</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Username */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Username</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your username"
-              placeholderTextColor="#94a3b8"
-              value={formData.username}
-              onChangeText={(value) => handleInputChange('username', value)}
-              autoCapitalize="none"
-            />
-          </View>
-
-          {/* Email */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your email"
-              placeholderTextColor="#94a3b8"
-              value={formData.email}
-              onChangeText={(value) => handleInputChange('email', value)}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-
-          {/* Age */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Age</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your age"
-              placeholderTextColor="#94a3b8"
-              value={formData.age}
-              onChangeText={(value) => handleInputChange('age', value)}
-              keyboardType="numeric"
-            />
-          </View>
-
-          {/* Gender */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Gender</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={formData.gender}
-                onValueChange={(value) => handleInputChange('gender', value)}
-                style={styles.picker}
-              >
-                <Picker.Item label="Select Gender" value="" />
-                <Picker.Item label="Male" value="male" />
-                <Picker.Item label="Female" value="female" />
-              </Picker>
-            </View>
-          </View>
-
-          {/* Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your password"
-              placeholderTextColor="#94a3b8"
-              value={formData.password}
-              onChangeText={(value) => handleInputChange('password', value)}
-              secureTextEntry
-            />
-          </View>
-
-          {/* Confirm Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Confirm Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm your password"
-              placeholderTextColor="#94a3b8"
-              value={formData.confirmPassword}
-              onChangeText={(value) => handleInputChange('confirmPassword', value)}
-              secureTextEntry
-            />
-          </View>
-
-          {/* Register Button */}
-          <TouchableOpacity 
-            style={[styles.registerButton, loading && styles.disabledButton]} 
-            onPress={handleRegister}
-            disabled={loading}
-          >
+    <PaperProvider theme={theme}>
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
+          <ScrollView contentContainerStyle={styles.scrollContainer}>
+            {/* Header */}
             <LinearGradient
-              colors={loading ? ['#94a3b8', '#64748b'] : ['#3b82f6', '#1d4ed8']}
-              style={styles.buttonGradient}
+              colors={['#1e3a8a', '#3b82f6']}
+              style={styles.header}
             >
-              <Text style={styles.registerButtonText}>
-                {loading ? 'Creating Account...' : 'Create Account'}
-              </Text>
+              <Text style={styles.headerTitle}>Create Account</Text>
+              <Text style={styles.headerSubtitle}>Join OptiScan today</Text>
             </LinearGradient>
-          </TouchableOpacity>
 
-          {/* Login Link */}
-          <View style={styles.loginSection}>
-            <Text style={styles.loginText}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.loginLink}>Sign In</Text>
-            </TouchableOpacity>
-          </View>
+            {/* Form Container */}
+            <Surface style={styles.formContainer} elevation={4}>
+              <Text variant="headlineMedium" style={styles.formTitle}>
+                Sign Up
+              </Text>
+              <Text variant="bodyLarge" style={styles.formSubtitle}>
+                Create your OptiScan account
+              </Text>
 
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+              {/* Profile Image Section */}
+              <View style={styles.imageSection}>
+                <Button
+                  mode="contained"
+                  onPress={pickImage}
+                  icon="camera"
+                  style={styles.imagePicker}
+                  contentStyle={styles.imagePickerContent}
+                >
+                  Upload Profile Picture
+                </Button>
+                
+                {image && (
+                  <View style={styles.imagePreviewContainer}>
+                    <Text variant="bodyMedium" style={styles.imageText}>
+                      Image selected
+                    </Text>
+                    <Image
+                      source={{ uri: image }}
+                      style={styles.profileImage}
+                    />
+                  </View>
+                )}
+              </View>
+
+              {/* Username Input */}
+              <TextInput
+                label="Username"
+                value={formData.username}
+                onChangeText={(value) => handleInputChange('username', value)}
+                mode="outlined"
+                autoCapitalize="none"
+                error={!!errors.username}
+                style={styles.input}
+                left={<TextInput.Icon icon="account" />}
+              />
+              {errors.username && (
+                <Text variant="bodySmall" style={styles.errorText}>
+                  {errors.username}
+                </Text>
+              )}
+
+              {/* Email Input */}
+              <TextInput
+                label="Email"
+                value={formData.email}
+                onChangeText={(value) => handleInputChange('email', value)}
+                mode="outlined"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                error={!!errors.email}
+                style={styles.input}
+                left={<TextInput.Icon icon="email" />}
+              />
+              {errors.email && (
+                <Text variant="bodySmall" style={styles.errorText}>
+                  {errors.email}
+                </Text>
+              )}
+
+              {/* Age Input */}
+              <TextInput
+                label="Age"
+                value={formData.age}
+                onChangeText={(value) => handleInputChange('age', value)}
+                mode="outlined"
+                keyboardType="numeric"
+                error={!!errors.age}
+                style={styles.input}
+                left={<TextInput.Icon icon="calendar" />}
+              />
+              {errors.age && (
+                <Text variant="bodySmall" style={styles.errorText}>
+                  {errors.age}
+                </Text>
+              )}
+
+              {/* Gender Selector */}
+              <Menu
+                visible={genderMenuVisible}
+                onDismiss={() => setGenderMenuVisible(false)}
+                anchor={
+                  <TextInput
+                    label="Gender"
+                    value={formData.gender ? formData.gender.charAt(0).toUpperCase() + formData.gender.slice(1) : ''}
+                    mode="outlined"
+                    editable={false}
+                    error={!!errors.gender}
+                    style={styles.input}
+                    left={<TextInput.Icon icon="human-male-female" />}
+                    right={<TextInput.Icon icon="chevron-down" onPress={() => setGenderMenuVisible(true)} />}
+                    onPressIn={() => setGenderMenuVisible(true)}
+                  />
+                }
+              >
+                <Menu.Item onPress={() => { handleInputChange('gender', 'male'); setGenderMenuVisible(false); }} title="Male" />
+                <Menu.Item onPress={() => { handleInputChange('gender', 'female'); setGenderMenuVisible(false); }} title="Female" />
+                <Menu.Item onPress={() => { handleInputChange('gender', 'other'); setGenderMenuVisible(false); }} title="Other" />
+              </Menu>
+              {errors.gender && (
+                <Text variant="bodySmall" style={styles.errorText}>
+                  {errors.gender}
+                </Text>
+              )}
+
+              {/* Password Input */}
+              <TextInput
+                label="Password"
+                value={formData.password}
+                onChangeText={(value) => handleInputChange('password', value)}
+                mode="outlined"
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                error={!!errors.password}
+                style={styles.input}
+                left={<TextInput.Icon icon="lock" />}
+              />
+              {errors.password && (
+                <Text variant="bodySmall" style={styles.errorText}>
+                  {errors.password}
+                </Text>
+              )}
+
+              {/* Register Button */}
+              <Button
+                mode="contained"
+                onPress={handleRegister}
+                loading={loading}
+                disabled={loading}
+                style={styles.registerButton}
+                contentStyle={styles.registerButtonContent}
+                labelStyle={styles.registerButtonText}
+              >
+                {loading ? 'Creating Account...' : 'Create Account'}
+              </Button>
+
+              {/* Login Link */}
+              <View style={styles.loginSection}>
+                <Text variant="bodyMedium" style={styles.loginText}>
+                  Already have an account?
+                </Text>
+                <Button 
+                  mode="text" 
+                  onPress={() => navigation.navigate('Login')}
+                  labelStyle={styles.loginLink}
+                >
+                  Sign In
+                </Button>
+              </View>
+            </Surface>
+          </ScrollView>
+
+          {/* Snackbar */}
+          <Snackbar
+            visible={snackbarVisible}
+            onDismiss={() => setSnackbarVisible(false)}
+            duration={3000}
+            style={styles.snackbar}
+          >
+            {snackbarMessage}
+          </Snackbar>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </PaperProvider>
   );
 }
 
@@ -306,139 +412,105 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContainer: {
+    flexGrow: 1,
+  },
   header: {
-    paddingTop: 20,
-    paddingBottom: 30,
-    paddingHorizontal: 20,
+    height: height * 0.25,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 20,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#ffffff',
-    marginBottom: 5,
+    marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16,
     color: '#e0f2fe',
   },
-  scrollView: {
-    flex: 1,
-  },
   formContainer: {
-    padding: 20,
+    margin: 20,
+    padding: 30,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+  },
+  formTitle: {
+    textAlign: 'center',
+    color: '#1e40af',
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  formSubtitle: {
+    textAlign: 'center',
+    color: '#64748b',
+    marginBottom: 30,
   },
   imageSection: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 25,
   },
-  imagePickerContainer: {
+  imagePicker: {
+    borderRadius: 25,
+    marginBottom: 15,
+  },
+  imagePickerContent: {
+    height: 50,
+  },
+  imagePreviewContainer: {
     alignItems: 'center',
+    marginTop: 10,
+  },
+  imageText: {
+    color: '#1e40af',
+    fontWeight: '600',
+    marginBottom: 10,
   },
   profileImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     borderWidth: 3,
     borderColor: '#3b82f6',
   },
-  placeholderImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#e2e8f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#cbd5e1',
-    borderStyle: 'dashed',
-  },
-  placeholderText: {
-    fontSize: 30,
-    marginBottom: 5,
-  },
-  placeholderLabel: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e40af',
-    marginBottom: 8,
-  },
   input: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    padding: 15,
-    fontSize: 16,
-    color: '#1e293b',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    marginBottom: 10,
   },
-  pickerContainer: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  picker: {
-    color: '#1e293b',
+  errorText: {
+    color: '#dc2626',
+    marginBottom: 15,
+    marginLeft: 5,
   },
   registerButton: {
-    marginTop: 20,
+    marginTop: 10,
     marginBottom: 20,
-    height: 56,
     borderRadius: 28,
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
-  disabledButton: {
-    shadowOpacity: 0.1,
-    elevation: 2,
-  },
-  buttonGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 28,
+  registerButtonContent: {
+    height: 50,
   },
   registerButtonText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#ffffff',
   },
   loginSection: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 30,
   },
   loginText: {
-    fontSize: 16,
     color: '#64748b',
   },
   loginLink: {
-    fontSize: 16,
-    fontWeight: '600',
     color: '#3b82f6',
+    fontWeight: '600',
+  },
+  snackbar: {
+    margin: 16,
   },
 });

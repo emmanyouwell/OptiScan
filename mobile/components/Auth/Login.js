@@ -1,19 +1,39 @@
 import React, { useState } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-  Alert,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
+import {
+  TextInput,
+  Button,
+  Text,
+  Surface,
+  IconButton,
+  Snackbar,
+  ActivityIndicator,
+  Provider as PaperProvider,
+  DefaultTheme,
+} from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import axios from 'axios';
+import baseURL from '../../assets/common/baseURL';
 
 const { width, height } = Dimensions.get('window');
+
+// Custom theme
+const theme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: '#3b82f6',
+    accent: '#1d4ed8',
+  },
+};
 
 export default function Login({ navigation }) {
   const [formData, setFormData] = useState({
@@ -22,35 +42,46 @@ export default function Login({ navigation }) {
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [errors, setErrors] = useState({});
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const showSnackbar = (message) => {
+    setSnackbarMessage(message);
+    setSnackbarVisible(true);
   };
 
   const validateForm = () => {
     const { email, password } = formData;
+    const newErrors = {};
 
     if (!email.trim()) {
-      Alert.alert('Validation Error', 'Email is required');
-      return false;
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert('Validation Error', 'Please enter a valid email address');
-      return false;
+      newErrors.email = 'Email is required';
+    } else {
+      // Email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        newErrors.email = 'Please enter a valid email address';
+      }
     }
 
     if (!password) {
-      Alert.alert('Validation Error', 'Password is required');
-      return false;
+      newErrors.password = 'Password is required';
     }
 
-    return true;
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleLogin = async () => {
@@ -64,135 +95,187 @@ export default function Login({ navigation }) {
       formDataToSend.append('email', formData.email);
       formDataToSend.append('password', formData.password);
 
-      // Replace with your actual API endpoint
-      const response = await fetch('http://your-backend-url/users/login', {
-        method: 'POST',
-        body: formDataToSend,
+      const apiURL = `${baseURL}/api/users/login`;
+      console.log('🚀 Sending login request to:', apiURL);
+
+      // Axios POST request
+      const response = await axios.post(apiURL, formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 30000,
       });
 
-      const result = await response.json();
+      console.log('✅ Login response:', response.data);
 
-      if (response.ok) {
+      if (response.data.access_token) {
         // Store token if needed (you might want to use AsyncStorage)
-        // await AsyncStorage.setItem('access_token', result.access_token);
+        // await AsyncStorage.setItem('access_token', response.data.access_token);
         
-        Alert.alert('Success', 'Login successful!', [
-          { text: 'OK', onPress: () => navigation.navigate('Dashboard') }
-        ]);
+        showSnackbar('Login successful!');
+        
+        // Clear form
+        setFormData({
+          email: '',
+          password: '',
+        });
+        
+        // Navigate after a short delay
+        setTimeout(() => {
+          navigation.navigate('Home');
+        }, 1500);
       } else {
-        Alert.alert('Login Failed', result.detail || 'Invalid credentials');
+        showSnackbar('Invalid response from server');
       }
+
     } catch (error) {
-      console.error('Login error:', error);
-      Alert.alert('Error', 'Network error. Please try again.');
+      console.error('❌ Login error:', error);
+
+      let errorMessage = 'Login failed. Please try again.';
+
+      if (error.response) {
+        if (error.response.data?.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.response.status === 401) {
+          errorMessage = 'Invalid email or password. Please try again.';
+        } else if (error.response.status === 400) {
+          errorMessage = 'Invalid input data. Please check your credentials.';
+        } else if (error.response.status === 500) {
+          errorMessage = 'Server error. Please try again later.';
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else {
+        errorMessage = 'An unexpected error occurred.';
+      }
+
+      showSnackbar(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        {/* Header */}
-        <LinearGradient
-          colors={['#1e3a8a', '#3b82f6']}
-          style={styles.header}
+    <PaperProvider theme={theme}>
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
         >
-          <View style={styles.logoContainer}>
-            {/* Eye Icon */}
-            <View style={styles.eyeIcon}>
-              <View style={styles.eyeOuter}>
-                <View style={styles.eyeInner}>
-                  <View style={styles.pupil} />
+          <ScrollView contentContainerStyle={styles.scrollContainer}>
+            {/* Header */}
+            <LinearGradient
+              colors={['#1e3a8a', '#3b82f6']}
+              style={styles.header}
+            >
+              <View style={styles.logoContainer}>
+                {/* Eye Icon */}
+                <View style={styles.eyeIcon}>
+                  <View style={styles.eyeOuter}>
+                    <View style={styles.eyeInner}>
+                      <View style={styles.pupil} />
+                    </View>
+                  </View>
                 </View>
+                <Text style={styles.logoText}>OptiScan</Text>
+                <Text style={styles.headerSubtitle}>Welcome back!</Text>
               </View>
-            </View>
-            <Text style={styles.logoText}>OptiScan</Text>
-            <Text style={styles.headerSubtitle}>Welcome back!</Text>
-          </View>
-        </LinearGradient>
+            </LinearGradient>
 
-        <View style={styles.formContainer}>
-          <Text style={styles.formTitle}>Sign In</Text>
-          <Text style={styles.formSubtitle}>Enter your credentials to continue</Text>
+            {/* Form Container */}
+            <Surface style={styles.formContainer} elevation={4}>
+              <Text variant="headlineMedium" style={styles.formTitle}>
+                Sign In
+              </Text>
+              <Text variant="bodyLarge" style={styles.formSubtitle}>
+                Enter your credentials to continue
+              </Text>
 
-          {/* Email */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your email"
-              placeholderTextColor="#94a3b8"
-              value={formData.email}
-              onChangeText={(value) => handleInputChange('email', value)}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          {/* Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordContainer}>
+              {/* Email Input */}
               <TextInput
-                style={styles.passwordInput}
-                placeholder="Enter your password"
-                placeholderTextColor="#94a3b8"
+                label="Email"
+                value={formData.email}
+                onChangeText={(value) => handleInputChange('email', value)}
+                mode="outlined"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                error={!!errors.email}
+                style={styles.input}
+                left={<TextInput.Icon icon="email" />}
+              />
+              {errors.email && (
+                <Text variant="bodySmall" style={styles.errorText}>
+                  {errors.email}
+                </Text>
+              )}
+
+              {/* Password Input */}
+              <TextInput
+                label="Password"
                 value={formData.password}
                 onChangeText={(value) => handleInputChange('password', value)}
+                mode="outlined"
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
+                error={!!errors.password}
+                style={styles.input}
+                left={<TextInput.Icon icon="lock" />}
+                right={
+                  <TextInput.Icon 
+                    icon={showPassword ? "eye-off" : "eye"} 
+                    onPress={() => setShowPassword(!showPassword)}
+                  />
+                }
               />
-              <TouchableOpacity 
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Text style={styles.eyeButtonText}>
-                  {showPassword ? '🙈' : '👁️'}
+              {errors.password && (
+                <Text variant="bodySmall" style={styles.errorText}>
+                  {errors.password}
                 </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+              )}
 
-          {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotPasswordContainer}>
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
-
-          {/* Login Button */}
-          <TouchableOpacity 
-            style={[styles.loginButton, loading && styles.disabledButton]} 
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            <LinearGradient
-              colors={loading ? ['#94a3b8', '#64748b'] : ['#3b82f6', '#1d4ed8']}
-              style={styles.buttonGradient}
-            >
-              <Text style={styles.loginButtonText}>
+              {/* Login Button */}
+              <Button
+                mode="contained"
+                onPress={handleLogin}
+                loading={loading}
+                disabled={loading}
+                style={styles.loginButton}
+                contentStyle={styles.loginButtonContent}
+                labelStyle={styles.loginButtonText}
+              >
                 {loading ? 'Signing In...' : 'Sign In'}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
+              </Button>
 
-          {/* Register Link */}
-          <View style={styles.registerSection}>
-            <Text style={styles.registerText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.registerLink}>Create Account</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+              {/* Register Link */}
+              <View style={styles.registerSection}>
+                <Text variant="bodyMedium" style={styles.registerText}>
+                  Don't have an account?
+                </Text>
+                <Button 
+                  mode="text" 
+                  onPress={() => navigation.navigate('Register')}
+                  labelStyle={styles.registerLink}
+                >
+                  Create Account
+                </Button>
+              </View>
+            </Surface>
+          </ScrollView>
+
+          {/* Snackbar */}
+          <Snackbar
+            visible={snackbarVisible}
+            onDismiss={() => setSnackbarVisible(false)}
+            duration={3000}
+            style={styles.snackbar}
+          >
+            {snackbarMessage}
+          </Snackbar>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </PaperProvider>
   );
 }
 
@@ -203,6 +286,9 @@ const styles = StyleSheet.create({
   },
   keyboardView: {
     flex: 1,
+  },
+  scrollContainer: {
+    flexGrow: 1,
   },
   header: {
     height: height * 0.35,
@@ -254,104 +340,48 @@ const styles = StyleSheet.create({
     color: '#e0f2fe',
   },
   formContainer: {
-    flex: 1,
+    margin: 20,
     padding: 30,
-    justifyContent: 'center',
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
   },
   formTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1e40af',
     textAlign: 'center',
+    color: '#1e40af',
+    fontWeight: 'bold',
     marginBottom: 10,
   },
   formSubtitle: {
-    fontSize: 16,
-    color: '#64748b',
     textAlign: 'center',
-    marginBottom: 40,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e40af',
-    marginBottom: 8,
+    color: '#64748b',
+    marginBottom: 30,
   },
   input: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    padding: 15,
-    fontSize: 16,
-    color: '#1e293b',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    marginBottom: 10,
   },
-  passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+  errorText: {
+    color: '#dc2626',
+    marginBottom: 15,
+    marginLeft: 5,
   },
-  passwordInput: {
-    flex: 1,
-    padding: 15,
-    fontSize: 16,
-    color: '#1e293b',
-  },
-  eyeButton: {
-    padding: 15,
-  },
-  eyeButtonText: {
-    fontSize: 18,
-  },
-  forgotPasswordContainer: {
-    alignItems: 'flex-end',
-    marginBottom: 30,
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: 20,
   },
   forgotPasswordText: {
-    fontSize: 14,
     color: '#3b82f6',
-    fontWeight: '500',
+    fontSize: 14,
   },
   loginButton: {
-    height: 56,
+    marginBottom: 20,
     borderRadius: 28,
-    marginBottom: 30,
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
-  disabledButton: {
-    shadowOpacity: 0.1,
-    elevation: 2,
-  },
-  buttonGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 28,
+  loginButtonContent: {
+    height: 50,
   },
   loginButtonText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#ffffff',
   },
   registerSection: {
     flexDirection: 'row',
@@ -359,12 +389,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   registerText: {
-    fontSize: 16,
     color: '#64748b',
   },
   registerLink: {
-    fontSize: 16,
-    fontWeight: '600',
     color: '#3b82f6',
+    fontWeight: '600',
+  },
+  snackbar: {
+    margin: 16,
   },
 });
