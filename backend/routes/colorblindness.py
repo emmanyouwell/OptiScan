@@ -11,7 +11,7 @@ from typing import List, Optional
 from bson import ObjectId
 from datetime import datetime, timezone
 from bson import ObjectId
-from models.color_blindness import ColorBlindnessTest, IshiharaPlate, ColorBlindnessType
+from models.colorblindness import ColorBlindnessTest, IshiharaPlate, ColorBlindnessType
 from config.db import db
 
 router = APIRouter()
