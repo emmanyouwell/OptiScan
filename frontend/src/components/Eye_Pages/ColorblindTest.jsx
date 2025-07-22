@@ -83,117 +83,117 @@ const ColorBlindTest = () => {
     }
   };
 
-  // const analyzeAndSave = async () => {
-  //   setShowAnalysis(true);
+  const analyzeAndSave = async () => {
+    setShowAnalysis(true);
 
-  //   const wrong = answers.filter(a => !a.is_correct).length + (userAnswer !== imageList[MAX_PLATES - 1].label.toString() ? 1 : 0);
-  //   let suspected_type = "normal";
-  //   if (wrong > 4) suspected_type = "protanopia";
+    const wrong = answers.filter(a => !a.is_correct).length + (userAnswer !== imageList[MAX_PLATES - 1].label.toString() ? 1 : 0);
+    let suspected_type = "normal";
+    if (wrong > 4) suspected_type = "protanopia";
 
-  //   let userId = null;
-  //   try {
-  //     const userData = localStorage.getItem("user");
-  //     if (userData) {
-  //       const userObj = JSON.parse(userData);
-  //       const candidateId = userObj?.id || userObj?.id || null;
-  //       if (candidateId && /^[0-9a-fA-F]{24}$/.test(candidateId)) {
-  //         userId = candidateId;
-  //       }
-  //     }
-  //   } catch (error) {
-  //     //
-  //   }
-  //   if (!userId) {
-  //     alert("Error: User ID is invalid or missing. Please login again.");
-  //     return;
-  //   }
-
-  //   const payload = {
-  //     user_id: userId,
-  //     plates: [
-  //       ...answers,
-  //       {
-  //         plate_number: MAX_PLATES,
-  //         correct_answer: imageList[MAX_PLATES - 1].label.toString(),
-  //         user_answer: userAnswer,
-  //         is_correct: userAnswer === imageList[MAX_PLATES - 1].label.toString()
-  //       }
-  //     ],
-  //     suspected_type,
-  //     confidence: Math.max(0, 100 - wrong * 7),
-  //     device_info: { os: window.navigator.platform }
-  //   };
-
-  //   setAnalysis({
-  //     suspected_type,
-  //     confidence: payload.confidence,
-  //     total_correct: payload.plates.filter(p => p.is_correct).length,
-  //     total_wrong: payload.plates.filter(p => !p.is_correct).length
-  //   });
-
-  //   try {
-  //     await axios.post("http://localhost:8000/api/colorblindness/predict", payload); 
-  //     // await axios.post("http://localhost:8000/api/colorblindness/save-result", payload); // <-- FIXED ENDPOINT
-  //   } catch (e) {
-  //     // handle error
-  //   }
-  // };
-
-const analyzeAndSave = async () => {
-  setShowAnalysis(true);
-
-  const wrong = answers.filter(a => !a.is_correct).length + (userAnswer !== imageList[MAX_PLATES - 1].label.toString() ? 1 : 0);
-  let suspected_type = "normal";
-  if (wrong > 4) suspected_type = "protanopia";
-
-  // Get user id from localStorage (as in Login.jsx)
-  let userId = null;
-  try {
-    const userData = localStorage.getItem("user");
-    if (userData) {
-      const userObj = JSON.parse(userData);
-      userId = userObj.id || userObj._id || null;
-      if (!userId || !/^[0-9a-fA-F]{24}$/.test(userId)) {
-        userId = null;
+    let userId = null;
+    try {
+      const userData = localStorage.getItem("user");
+      if (userData) {
+        const userObj = JSON.parse(userData);
+        const candidateId = userObj?.id || userObj?.id || null;
+        if (candidateId && /^[0-9a-fA-F]{24}$/.test(candidateId)) {
+          userId = candidateId;
+        }
       }
+    } catch (error) {
+      //
     }
-  } catch (error) {
-    userId = null;
-  }
-  if (!userId) {
-    alert("Error: User ID is invalid or missing. Please login again.");
-    return;
-  }
+    if (!userId) {
+      alert("Error: User ID is invalid or missing. Please login again.");
+      return;
+    }
 
-  const payload = {
-    user_id: userId,
-    plates: [
-      ...answers,
-      {
-        plate_number: MAX_PLATES,
-        correct_answer: imageList[MAX_PLATES - 1].label.toString(),
-        user_answer: userAnswer,
-        is_correct: userAnswer === imageList[MAX_PLATES - 1].label.toString()
-      }
-    ],
-    suspected_type,
-    confidence: Math.max(0, 100 - wrong * 7),
-    device_info: { os: window.navigator.platform }
+    const payload = {
+      user_id: userId,
+      plates: [
+        ...answers,
+        {
+          plate_number: MAX_PLATES,
+          correct_answer: imageList[MAX_PLATES - 1].label.toString(),
+          user_answer: userAnswer,
+          is_correct: userAnswer === imageList[MAX_PLATES - 1].label.toString()
+        }
+      ],
+      suspected_type,
+      confidence: Math.max(0, 100 - wrong * 7),
+      device_info: { os: window.navigator.platform }
+    };
+
+    setAnalysis({
+      suspected_type,
+      confidence: payload.confidence,
+      total_correct: payload.plates.filter(p => p.is_correct).length,
+      total_wrong: payload.plates.filter(p => !p.is_correct).length
+    });
+
+    try {
+      // await axios.post("http://localhost:8000/api/colorblindness/predict", payload); 
+      await axios.post("http://localhost:8000/api/colorblindness/save-result", payload); // <-- FIXED ENDPOINT
+    } catch (e) {
+      // handle error
+    }
   };
 
-  setAnalysis({
-    suspected_type,
-    confidence: payload.confidence,
-    total_correct: payload.plates.filter(p => p.is_correct).length,
-    total_wrong: payload.plates.filter(p => !p.is_correct).length
-  });
+// const analyzeAndSave = async () => {
+//   setShowAnalysis(true);
 
-  try {
-    await axios.post("http://localhost:8000/api/colorblindness/save-result", payload);
-  } catch (e) {
-    // handle error
-  }
-};
+//   const wrong = answers.filter(a => !a.is_correct).length + (userAnswer !== imageList[MAX_PLATES - 1].label.toString() ? 1 : 0);
+//   let suspected_type = "normal";
+//   if (wrong > 4) suspected_type = "protanopia";
+
+//   // Get user id from localStorage (as in Login.jsx)
+//   let userId = null;
+//   try {
+//     const userData = localStorage.getItem("user");
+//     if (userData) {
+//       const userObj = JSON.parse(userData);
+//       userId = userObj.id || userObj._id || null;
+//       if (!userId || !/^[0-9a-fA-F]{24}$/.test(userId)) {
+//         userId = null;
+//       }
+//     }
+//   } catch (error) {
+//     userId = null;
+//   }
+//   if (!userId) {
+//     alert("Error: User ID is invalid or missing. Please login again.");
+//     return;
+//   }
+
+//   const payload = {
+//     user_id: userId,
+//     plates: [
+//       ...answers,
+//       {
+//         plate_number: MAX_PLATES,
+//         correct_answer: imageList[MAX_PLATES - 1].label.toString(),
+//         user_answer: userAnswer,
+//         is_correct: userAnswer === imageList[MAX_PLATES - 1].label.toString()
+//       }
+//     ],
+//     suspected_type,
+//     confidence: Math.max(0, 100 - wrong * 7),
+//     device_info: { os: window.navigator.platform }
+//   };
+
+//   setAnalysis({
+//     suspected_type,
+//     confidence: payload.confidence,
+//     total_correct: payload.plates.filter(p => p.is_correct).length,
+//     total_wrong: payload.plates.filter(p => !p.is_correct).length
+//   });
+
+//   try {
+//     await axios.post("http://localhost:8000/api/colorblindness/save-result", payload);
+//   } catch (e) {
+//     // handle error
+//   }
+// };
   const handleNumpadClick = (num) => {
     setUserAnswer(prev => prev + num);
   };

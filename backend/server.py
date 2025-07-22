@@ -22,7 +22,7 @@ api_app.include_router(users.router, prefix="/users")
 api_app.include_router(eye_tracking.router, prefix="/eye-tracking")
 api_app.include_router(mediapipe.router, prefix="/mediapipe")  # Add this line
 api_app.include_router(colorblindness.router, prefix="/colorblindness") 
-# api_app.include_router(colorblindness_save.router, prefix="/colorblindness")
+# api_app.include_router(colorblindness.router, prefix="/colorblindness")
 api_app.include_router(ashihara_plates.router, prefix="/plates")
 
 app = FastAPI()

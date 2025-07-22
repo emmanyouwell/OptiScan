@@ -42,21 +42,21 @@ async def predict_number(file: UploadFile = File(...)):
     return {"predicted_number": predicted.item()}
 
 
-# class PlateInput(BaseModel):
-#     plate_number: int
-#     correct_answer: str
-#     user_answer: str
-#     is_correct: bool
+class PlateInput(BaseModel):
+    plate_number: int
+    correct_answer: str
+    user_answer: str
+    is_correct: bool
 
-# class ColorBlindnessTestInput(BaseModel):
-#     user_id: str
-#     plates: List[PlateInput]
-#     suspected_type: ColorBlindnessType
-#     confidence: float
-#     device_info: Optional[dict] = None
+class ColorBlindnessTestInput(BaseModel):
+    user_id: str
+    plates: List[PlateInput]
+    suspected_type: ColorBlindnessType
+    confidence: float
+    device_info: Optional[dict] = None
 
-# @router.post("/save-result")
-# async def save_colorblindness_result(test: ColorBlindnessTestInput):
+@router.post("/save-result")
+async def save_colorblindness_result(test: ColorBlindnessTestInput):
     try:
         user_obj_id = ObjectId(test.user_id)
     except Exception:
