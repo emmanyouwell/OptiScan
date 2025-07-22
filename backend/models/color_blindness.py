@@ -17,7 +17,7 @@ class IshiharaPlate(BaseModel):
     is_correct: bool
 
 class ColorBlindnessTest(BaseModel):
-    _id: ObjectId = Field(default_factory=ObjectId, alias="_id")
+    id: ObjectId = Field(default_factory=ObjectId, alias="_id")
     user_id: ObjectId
     test_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     plates: List[IshiharaPlate]
@@ -28,3 +28,4 @@ class ColorBlindnessTest(BaseModel):
     class Config:
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
+        populate_by_name = True  # Allows using 'id' and '_id' interchangeably

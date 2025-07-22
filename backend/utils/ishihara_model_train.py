@@ -6,10 +6,11 @@ from torch.utils.data import DataLoader
 from torchvision import models
 from ishihara_preprocessing import IshiharaDataset
 
+
 def train_model():
     dataset = IshiharaDataset(
-        image_dir="backend/data/ishihara_cards/images",
-        csv_file="backend/data/ishihara_cards/labels.csv"
+        image_dir="data/ishihara_cards/images",
+        csv_file="data/ishihara_cards/labels.csv"
     )
     dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
 
@@ -32,7 +33,7 @@ def train_model():
         print(f"Epoch {epoch+1}, Loss: {running_loss:.4f}")
 
     # Save model
-    torch.save(model.state_dict(), "backend/models/ishihara_cnn.pt")
+    torch.save(model.state_dict(), "models/ishihara_cnn.pt")
     print("✅ Model trained and saved!")
 
 if __name__ == "__main__":
