@@ -155,3 +155,32 @@ async def login(
     except Exception as e:
         logger.error(f"An error occurred during login: {str(e)}")
         raise HTTPException(status_code=500, detail=f"An error occurred during login: {str(e)}")
+
+# Add this new route to your existing users.py
+@router.get("/me")
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """Get current authenticated user information"""
+    try:
+        # Get full user data from database
+        user = db["users"].find_one({"_id": current_user["_id"]})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        return JSONResponse(content={
+            "user": {
+                "id": str(user["_id"]),
+                "username": user["username"],
+                "age": user.get("age"),
+                "email": user["email"],
+                "img_path": user.get("img_path"),
+                "gender": user.get("gender"),
+                "role": user["role"],
+                "created_at": str(user.get("created_at"))
+            }
+        })
+    
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logging.error(f"Error getting current user: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error getting user data")
