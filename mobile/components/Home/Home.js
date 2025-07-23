@@ -46,10 +46,7 @@ export default function Home({ navigation }) {
     const menuItems = [
       { icon: 'home', label: 'Home', screen: 'Home' },
       { icon: 'camera', label: 'Eye Scan', screen: 'EyeScan' },
-      { icon: 'chart-line', label: 'Health Reports', screen: 'Reports' },
       { icon: 'account-circle', label: 'Profile', screen: 'Profile' },
-      { icon: 'cog', label: 'Settings', screen: 'Settings' },
-      { icon: 'help-circle', label: 'Help & Support', screen: 'Help' },
     ];
 
     const openSidebar = () => {
@@ -74,8 +71,7 @@ export default function Home({ navigation }) {
     const handleMenuPress = (screen) => {
       closeSidebar();
       if (screen !== 'Home') {
-        // navigation.navigate(screen);
-        console.log(`Navigate to ${screen}`);
+        navigation.navigate(screen);
       }
     };
 
@@ -118,7 +114,8 @@ export default function Home({ navigation }) {
                 { transform: [{ translateX: slideAnim }] }
               ]}
             >
-              <TouchableOpacity activeOpacity={1}>
+              {/* Prevent close when touching inside sidebar */}
+              <TouchableOpacity activeOpacity={1} style={styles.sidebarContent}>
                 {/* Sidebar Header */}
                 <LinearGradient
                   colors={['#1e3a8a', '#3b82f6']}
@@ -135,17 +132,18 @@ export default function Home({ navigation }) {
                   <Text style={styles.sidebarSubtitle}>Eye Health Monitor</Text>
                 </LinearGradient>
 
-                {/* Menu Items */}
+                {/* Menu Items Container */}
                 <View style={styles.menuContainer}>
                   {menuItems.map((item, index) => (
                     <TouchableOpacity
                       key={index}
                       style={styles.menuItem}
                       onPress={() => handleMenuPress(item.screen)}
+                      activeOpacity={0.7}
                     >
                       <IconButton
                         icon={item.icon}
-                        size={24}
+                        size={22}
                         iconColor="#3b82f6"
                         style={styles.menuIcon}
                       />
@@ -154,15 +152,16 @@ export default function Home({ navigation }) {
                   ))}
                 </View>
 
-                {/* Logout */}
-                <View style={styles.sidebarFooter}>
+                {/* Logout Button - Fixed positioning */}
+                <View style={styles.logoutContainer}>
                   <TouchableOpacity
                     style={styles.logoutItem}
                     onPress={handleLogout}
+                    activeOpacity={0.7}
                   >
                     <IconButton
                       icon="logout"
-                      size={24}
+                      size={22}
                       iconColor="#ef4444"
                       style={styles.menuIcon}
                     />
@@ -508,7 +507,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 2,
   },
-  // Sidebar Styles
+  // Sidebar Styles - Fixed and Restructured
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -526,15 +525,17 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 10,
   },
+  sidebarContent: {
+    flex: 1,
+    flexDirection: 'column',
+  },
   sidebarHeader: {
-    paddingVertical: 40,
+    paddingVertical: 25,
     paddingHorizontal: 20,
     alignItems: 'center',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
   },
   sidebarEyeIcon: {
-    marginBottom: 15,
+    marginBottom: 10,
   },
   sidebarEyeOuter: {
     width: 50,
@@ -553,10 +554,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sidebarPupil: {
-    width: 12,
-    height: 12,
+    width: 10,
+    height: 10,
     backgroundColor: '#1e3a8a',
-    borderRadius: 6,
+    borderRadius: 5,
   },
   sidebarTitle: {
     fontSize: 20,
@@ -571,14 +572,17 @@ const styles = StyleSheet.create({
   menuContainer: {
     flex: 1,
     paddingTop: 20,
+    paddingHorizontal: 10,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 15,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    marginVertical: 2,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    marginBottom: 8,
   },
   menuIcon: {
     margin: 0,
@@ -588,26 +592,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#374151',
     fontWeight: '500',
+    flex: 1,
   },
-  sidebarFooter: {
+  // Fixed logout container styles
+  logoutContainer: {
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
-    paddingTop: 20,
+    paddingTop: 15,
+    paddingHorizontal: 10,
     paddingBottom: 20,
+    marginTop: 'auto', // This pushes the logout to the bottom
   },
   logoutItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 15,
     paddingVertical: 12,
+    borderRadius: 8,
     backgroundColor: '#fef2f2',
-    marginHorizontal: 10,
-    borderRadius: 10,
   },
   logoutLabel: {
     fontSize: 16,
     color: '#ef4444',
     fontWeight: '500',
+    flex: 1,
   },
   // Existing styles...
   header: {

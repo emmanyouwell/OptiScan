@@ -12,6 +12,7 @@ import LandingPage from '../components/LandingPage';
 import Login from '../components/Auth/Login';
 import Register from '../components/Auth/Register';
 import Home from '../components/Home/Home';
+import EyeScan from '../components/Home/Eye_Scan';
 
 const Stack = createNativeStackNavigator();
 
@@ -54,6 +55,10 @@ export default function MainNavigator() {
           <Stack.Screen 
             name="Home" 
             component={Home}
+          />  
+          <Stack.Screen 
+            name="EyeScan" 
+            component={EyeScan}
           />
         </Stack.Navigator>
       </NavigationContainer>
