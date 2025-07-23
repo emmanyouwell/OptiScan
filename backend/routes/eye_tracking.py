@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
 from bson import ObjectId
@@ -24,6 +24,9 @@ from models.eye_tracking import (
     TestStatus,
     AlertStatus
 )
+
+# Import authentication utilities
+from utils.utils import get_current_user
 
 # MongoDB
 from config.db import db
@@ -214,11 +217,14 @@ ear_processor = SimpleEarProcessor()
 pupil_processor = SimplePupilProcessor()
 blink_processor = SimpleBlinkProcessor()
 
-# Routes for each test
+# Routes for each test with authentication
 @router.post("/test/ear-detection")
-async def run_ear_test(request: EarTestRequest):
+async def run_ear_test(request: EarTestRequest, current_user: dict = Depends(get_current_user)):
     """Run the ear detection test"""
     try:
+        user_id = str(current_user["_id"])
+        print(f"User {user_id} running ear detection test")
+        
         # Process the frames
         results = ear_processor.process_frames(request.frames)
         
@@ -234,8 +240,13 @@ async def run_ear_test(request: EarTestRequest):
         # Analyze the results
         ear_result.analyze()
         
+        # Log the test for the user
+        print(f"Ear detection test completed for user {user_id}: "
+              f"Left: {ear_result.left_ear_score:.2f}, Right: {ear_result.right_ear_score:.2f}")
+        
         return {
             "status": "completed",
+            "user_id": user_id,
             "left_ear_score": ear_result.left_ear_score,
             "right_ear_score": ear_result.right_ear_score,
             "face_detected": ear_result.face_detected,
@@ -244,13 +255,16 @@ async def run_ear_test(request: EarTestRequest):
         }
         
     except Exception as e:
-        print(f"Error in ear test: {e}")
+        print(f"Error in ear test for user {current_user.get('_id', 'unknown')}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/test/pupil-dilation")
-async def run_pupil_test(request: PupilTestRequest):
+async def run_pupil_test(request: PupilTestRequest, current_user: dict = Depends(get_current_user)):
     """Run the pupil dilation test"""
     try:
+        user_id = str(current_user["_id"])
+        print(f"User {user_id} running pupil dilation test")
+        
         # Process the frames
         results = pupil_processor.process_frames(request.frames)
         
@@ -264,8 +278,13 @@ async def run_pupil_test(request: PupilTestRequest):
         # Analyze the results
         pupil_result.analyze()
         
+        # Log the test for the user
+        print(f"Pupil dilation test completed for user {user_id}: "
+              f"Left: {pupil_result.left_pupil_mm:.2f}mm, Right: {pupil_result.right_pupil_mm:.2f}mm")
+        
         return {
             "status": "completed",
+            "user_id": user_id,
             "left_pupil_mm": pupil_result.left_pupil_mm,
             "right_pupil_mm": pupil_result.right_pupil_mm,
             "result": pupil_result.result,
@@ -273,13 +292,16 @@ async def run_pupil_test(request: PupilTestRequest):
         }
         
     except Exception as e:
-        print(f"Error in pupil test: {e}")
+        print(f"Error in pupil test for user {current_user.get('_id', 'unknown')}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/test/blink-count")
-async def run_blink_test(request: BlinkTestRequest):
+async def run_blink_test(request: BlinkTestRequest, current_user: dict = Depends(get_current_user)):
     """Run the blink count test"""
     try:
+        user_id = str(current_user["_id"])
+        print(f"User {user_id} running blink count test")
+        
         # Process the frames
         results = blink_processor.process_frames(request.frames)
         
@@ -293,8 +315,13 @@ async def run_blink_test(request: BlinkTestRequest):
         # Analyze the results
         blink_result.analyze()
         
+        # Log the test for the user
+        print(f"Blink count test completed for user {user_id}: "
+              f"Total blinks: {blink_result.total_blinks}, Rate: {blink_result.blinks_per_minute:.1f}/min")
+        
         return {
             "status": "completed",
+            "user_id": user_id,
             "total_blinks": blink_result.total_blinks,
             "blinks_per_minute": blink_result.blinks_per_minute,
             "result": blink_result.result,
@@ -302,49 +329,78 @@ async def run_blink_test(request: BlinkTestRequest):
         }
         
     except Exception as e:
-        print(f"Error in blink test: {e}")
+        print(f"Error in blink test for user {current_user.get('_id', 'unknown')}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Session management
+# Session management with user tracking
 @router.post("/session/create")
-async def create_test_session():
-    """Create a new test session"""
+async def create_test_session(current_user: dict = Depends(get_current_user)):
+    """Create a new test session for authenticated user"""
     try:
+        user_id = str(current_user["_id"])
+        print(f"Creating new test session for user {user_id}")
+        
         session = EyeTestSession()
         
-        # Save to database
+        # Save to database with user information
         session_data = session.dict()
         session_data["_id"] = session.session_id
+        session_data["user_id"] = user_id  # Track which user owns this session
+        session_data["created_by"] = user_id
+        session_data["created_at"] = datetime.now(timezone.utc)
         
         result = sessions_collection.insert_one(session_data)
         if not result.inserted_id:
             raise HTTPException(status_code=500, detail="Failed to create session")
         
+        print(f"Session {session.session_id} created successfully for user {user_id}")
+        
         return {
             "session_id": session.session_id,
+            "user_id": user_id,
             "message": "Session created successfully"
         }
         
     except Exception as e:
+        print(f"Error creating session for user {current_user.get('_id', 'unknown')}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/session/{session_id}")
-async def get_test_session(session_id: str):
-    """Get a test session"""
+async def get_test_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a test session (only if it belongs to the current user)"""
     try:
-        session_data = sessions_collection.find_one({"_id": session_id})
-        if not session_data:
-            raise HTTPException(status_code=404, detail="Session not found")
+        user_id = str(current_user["_id"])
         
+        session_data = sessions_collection.find_one({
+            "_id": session_id,
+            "user_id": user_id  # Ensure user can only access their own sessions
+        })
+        
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found or access denied")
+        
+        print(f"User {user_id} accessed session {session_id}")
         return session_data
         
     except Exception as e:
+        print(f"Error getting session {session_id} for user {current_user.get('_id', 'unknown')}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/session/{session_id}/update-ear")
-async def update_ear_results(session_id: str, ear_data: dict):
-    """Update ear test results in session"""
+async def update_ear_results(session_id: str, ear_data: dict, current_user: dict = Depends(get_current_user)):
+    """Update ear test results in session (only for session owner)"""
     try:
+        user_id = str(current_user["_id"])
+        
+        # Verify session belongs to user
+        session_check = sessions_collection.find_one({
+            "_id": session_id,
+            "user_id": user_id
+        })
+        
+        if not session_check:
+            raise HTTPException(status_code=404, detail="Session not found or access denied")
+        
         # Create proper ear result object
         ear_result = EarDetectionResult(
             status=TestStatus.COMPLETED,
@@ -356,23 +412,40 @@ async def update_ear_results(session_id: str, ear_data: dict):
         )
         
         result = sessions_collection.update_one(
-            {"_id": session_id},
-            {"$set": {"ear_test": ear_result.dict()}}
+            {"_id": session_id, "user_id": user_id},
+            {
+                "$set": {
+                    "ear_test": ear_result.dict(),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
         )
         
         if result.modified_count == 0:
-            raise HTTPException(status_code=404, detail="Session not found")
+            raise HTTPException(status_code=404, detail="Session not found or access denied")
         
-        return {"message": "Ear test results updated"}
+        print(f"Ear test results updated for user {user_id} in session {session_id}")
+        return {"message": "Ear test results updated", "user_id": user_id}
         
     except Exception as e:
-        print(f"Error updating ear results: {e}")
+        print(f"Error updating ear results for user {current_user.get('_id', 'unknown')}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/session/{session_id}/update-pupil")
-async def update_pupil_results(session_id: str, pupil_data: dict):
-    """Update pupil test results in session"""
+async def update_pupil_results(session_id: str, pupil_data: dict, current_user: dict = Depends(get_current_user)):
+    """Update pupil test results in session (only for session owner)"""
     try:
+        user_id = str(current_user["_id"])
+        
+        # Verify session belongs to user
+        session_check = sessions_collection.find_one({
+            "_id": session_id,
+            "user_id": user_id
+        })
+        
+        if not session_check:
+            raise HTTPException(status_code=404, detail="Session not found or access denied")
+        
         # Create proper pupil result object
         pupil_result = PupilDilationResult(
             status=TestStatus.COMPLETED,
@@ -382,23 +455,40 @@ async def update_pupil_results(session_id: str, pupil_data: dict):
         )
         
         result = sessions_collection.update_one(
-            {"_id": session_id},
-            {"$set": {"pupil_test": pupil_result.dict()}}
+            {"_id": session_id, "user_id": user_id},
+            {
+                "$set": {
+                    "pupil_test": pupil_result.dict(),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
         )
         
         if result.modified_count == 0:
-            raise HTTPException(status_code=404, detail="Session not found")
+            raise HTTPException(status_code=404, detail="Session not found or access denied")
         
-        return {"message": "Pupil test results updated"}
+        print(f"Pupil test results updated for user {user_id} in session {session_id}")
+        return {"message": "Pupil test results updated", "user_id": user_id}
         
     except Exception as e:
-        print(f"Error updating pupil results: {e}")
+        print(f"Error updating pupil results for user {current_user.get('_id', 'unknown')}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
 @router.post("/session/{session_id}/update-blink")
-async def update_blink_results(session_id: str, blink_data: dict):
-    """Update blink test results in session"""
+async def update_blink_results(session_id: str, blink_data: dict, current_user: dict = Depends(get_current_user)):
+    """Update blink test results in session (only for session owner)"""
     try:
+        user_id = str(current_user["_id"])
+        
+        # Verify session belongs to user
+        session_check = sessions_collection.find_one({
+            "_id": session_id,
+            "user_id": user_id
+        })
+        
+        if not session_check:
+            raise HTTPException(status_code=404, detail="Session not found or access denied")
+        
         # Create proper blink result object
         blink_result = BlinkCountResult(
             status=TestStatus.COMPLETED,
@@ -409,27 +499,41 @@ async def update_blink_results(session_id: str, blink_data: dict):
         )
         
         result = sessions_collection.update_one(
-            {"_id": session_id},
-            {"$set": {"blink_test": blink_result.dict()}}
+            {"_id": session_id, "user_id": user_id},
+            {
+                "$set": {
+                    "blink_test": blink_result.dict(),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
         )
         
         if result.modified_count == 0:
-            raise HTTPException(status_code=404, detail="Session not found")
+            raise HTTPException(status_code=404, detail="Session not found or access denied")
         
-        return {"message": "Blink test results updated"}
+        print(f"Blink test results updated for user {user_id} in session {session_id}")
+        return {"message": "Blink test results updated", "user_id": user_id}
         
     except Exception as e:
-        print(f"Error updating blink results: {e}")
+        print(f"Error updating blink results for user {current_user.get('_id', 'unknown')}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
 @router.post("/session/{session_id}/finalize")
-async def finalize_test_session(session_id: str):
-    """Calculate final results for all tests"""
+async def finalize_test_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    """Calculate final results for all tests (only for session owner)"""
     try:
-        # Get session data
-        session_data = sessions_collection.find_one({"_id": session_id})
+        user_id = str(current_user["_id"])
+        
+        # Get session data and verify ownership
+        session_data = sessions_collection.find_one({
+            "_id": session_id,
+            "user_id": user_id
+        })
+        
         if not session_data:
-            raise HTTPException(status_code=404, detail="Session not found")
+            raise HTTPException(status_code=404, detail="Session not found or access denied")
+        
+        print(f"Finalizing session {session_id} for user {user_id}")
         
         # Remove MongoDB _id field for Pydantic model
         session_data.pop("_id", None)
@@ -479,38 +583,76 @@ async def finalize_test_session(session_id: str):
         
         # Update in database
         sessions_collection.update_one(
-            {"_id": session_id},
+            {"_id": session_id, "user_id": user_id},
             {"$set": {
                 "final_status": session.final_status.value,
                 "confidence": session.confidence,
                 "summary": session.summary,
                 "recommendations": session.recommendations,
-                "end_time": session.end_time
+                "end_time": session.end_time,
+                "finalized_at": datetime.now(timezone.utc),
+                "finalized_by": user_id
             }}
         )
+        
+        print(f"Session {session_id} finalized for user {user_id} - Status: {session.final_status.value}")
         
         return {
             "final_status": session.final_status.value,
             "confidence": session.confidence,
             "summary": session.summary,
-            "recommendations": session.recommendations
+            "recommendations": session.recommendations,
+            "user_id": user_id
         }
         
     except Exception as e:
-        print(f"Error in finalize_test_session: {e}")
+        print(f"Error in finalize_test_session for user {current_user.get('_id', 'unknown')}: {e}")
         raise HTTPException(status_code=500, detail=f"Error finalizing session: {str(e)}")
+
 # Simple health check
 @router.get("/health")
 async def health_check():
     """Check if the API is working"""
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc)}
 
-# Get all sessions
+# Get user's sessions only
 @router.get("/sessions")
-async def list_all_sessions():
-    """Get list of all test sessions"""
+async def list_user_sessions(current_user: dict = Depends(get_current_user)):
+    """Get list of current user's test sessions only"""
     try:
-        sessions = list(sessions_collection.find())
-        return {"sessions": sessions, "total": len(sessions)}
+        user_id = str(current_user["_id"])
+        
+        sessions = list(sessions_collection.find({"user_id": user_id}))
+        
+        print(f"Retrieved {len(sessions)} sessions for user {user_id}")
+        
+        return {
+            "sessions": sessions, 
+            "total": len(sessions),
+            "user_id": user_id
+        }
+        
     except Exception as e:
+        print(f"Error listing sessions for user {current_user.get('_id', 'unknown')}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Admin route to get all sessions (you can restrict this further if needed)
+@router.get("/admin/sessions")
+async def list_all_sessions(current_user: dict = Depends(get_current_user)):
+    """Get list of all test sessions (admin only - you can add role checking here)"""
+    try:
+        user_id = str(current_user["_id"])
+        print(f"Admin user {user_id} requesting all sessions")
+        
+        # You can add role checking here if you have user roles
+        sessions = list(sessions_collection.find())
+        
+        return {
+            "sessions": sessions, 
+            "total": len(sessions),
+            "requested_by": user_id
+        }
+        
+    except Exception as e:
+        print(f"Error listing all sessions for admin {current_user.get('_id', 'unknown')}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
