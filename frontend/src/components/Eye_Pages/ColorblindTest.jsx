@@ -171,64 +171,6 @@ const ColorBlindTest = () => {
       alert("Error saving results. Please try again later.");
     }
   };
-  // OG
-  // const analyzeAndSave = async () => {
-  //   setShowAnalysis(true);
-
-  //   const wrong = answers.filter(a => !a.is_correct).length + (userAnswer !== imageList[MAX_PLATES - 1].label.toString() ? 1 : 0);
-  //   let suspected_type = "normal";
-  //   if (wrong > 4) suspected_type = "protanopia";
-
-  //   let userId = null;
-  //   try {
-  //     const userData = localStorage.getItem("user");
-  //     if (userData) {
-  //       const userObj = JSON.parse(userData);
-  //       const candidateId = userObj?.id || userObj?.id || null;
-  //       if (candidateId && /^[0-9a-fA-F]{24}$/.test(candidateId)) {
-  //         userId = candidateId;
-  //       }
-  //     }
-  //   } catch (error) {
-  //     console.error("Error parsing user data from localStorage:", error);
-  //     alert("Error retrieving user data. Please login again.");
-  //     return;
-  //   }
-  //   if (!userId) {
-  //     alert("Error: User ID is invalid or missing. Please login again.");
-  //     return;
-  //   }
-
-  //   const payload = {
-  //     user_id: userId,
-  //     plates: [
-  //       ...answers,
-  //       {
-  //         plate_number: MAX_PLATES,
-  //         correct_answer: imageList[MAX_PLATES - 1].label.toString(),
-  //         user_answer: userAnswer,
-  //         is_correct: userAnswer === imageList[MAX_PLATES - 1].label.toString()
-  //       }
-  //     ],
-  //     suspected_type,
-  //     confidence: Math.max(0, 100 - wrong * 7),
-  //     device_info: { os: window.navigator.platform }
-  //   };
-
-  //   setAnalysis({
-  //     suspected_type,
-  //     confidence: payload.confidence,
-  //     total_correct: payload.plates.filter(p => p.is_correct).length,
-  //     total_wrong: payload.plates.filter(p => !p.is_correct).length
-  //   });
-
-  //   try {
-  //     await axios.post("http://localhost:8000/api/colorblindness/save-result", payload); 
-  //   } catch (e) {
-  //     console.error("Error saving results:", e);
-  //     alert("Error saving results. Please try again later.");
-  //   }
-  // };
 
 
   const handleNumpadClick = (num) => {

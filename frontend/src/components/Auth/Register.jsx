@@ -8,19 +8,30 @@ function Register() {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    password: ''
+    password: '',
+    age: '',
+    gender: '',
+    img: null
   });
-  
+
   const [error, setError] = useState('');
 
+  // const handleChange = (e) => {
+  //   const { name, value } = e.target;
+  //   setFormData({
+  //     ...formData,
+  //     [name]: value
+  //   });
+  // };
+
+
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, files } = e.target;
     setFormData({
       ...formData,
-      [name]: value
+      [name]: type === 'file' ? files[0] : value
     });
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -32,11 +43,18 @@ function Register() {
     }
 
     try {
-      // Create FormData object to match backend expectations
+      // // Create FormData object to match backend expectations
+      // const formDataToSend = new FormData();
+      // formDataToSend.append('username', formData.username);
+      // formDataToSend.append('email', formData.email);
+      // formDataToSend.append('password', formData.password);
       const formDataToSend = new FormData();
       formDataToSend.append('username', formData.username);
       formDataToSend.append('email', formData.email);
       formDataToSend.append('password', formData.password);
+      formDataToSend.append('age', formData.age);
+      if (formData.gender) formDataToSend.append('gender', formData.gender);
+      if (formData.img) formDataToSend.append('img', formData.img);
 
       const response = await axios.post(`${BASE_URL}/api/users/register`, formDataToSend, {
         headers: {
@@ -55,9 +73,9 @@ function Register() {
     <div className="register-container">
       <div className="register-form-wrapper">
         <h1>Register</h1>
-        
+
         {error && <div className="error-message">{error}</div>}
-        
+
         <form onSubmit={handleSubmit} className="register-form">
           <div className="form-group">
             <label htmlFor="username">Username</label>
@@ -70,7 +88,7 @@ function Register() {
               placeholder="Enter your username"
             />
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="email">Email</label>
             <input
@@ -82,7 +100,47 @@ function Register() {
               placeholder="Enter your email"
             />
           </div>
-          
+
+          <div className="form-group">
+            <label htmlFor="age">Age</label>
+            <input
+              type="number"
+              id="age"
+              name="age"
+              value={formData.age}
+              onChange={handleChange}
+              placeholder="Enter your age"
+              min="1"
+              max="150"
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="gender">Gender</label>
+            <select
+              id="gender"
+              name="gender"
+              value={formData.gender}
+              onChange={handleChange}
+            >
+              <option value="">Select gender (optional)</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="img">Profile Image (optional)</label>
+            <input
+              type="file"
+              id="img"
+              name="img"
+              accept="image/*"
+              onChange={e => setFormData({ ...formData, img: e.target.files[0] })}
+            />
+          </div>
+
           <div className="form-group">
             <label htmlFor="password">Password</label>
             <input
@@ -94,10 +152,10 @@ function Register() {
               placeholder="Enter your password"
             />
           </div>
-          
+
           <button type="submit" className="register-button">Register</button>
         </form>
-        
+
         <div className="additional-options">
           <p>Already have an account? <a href="/login">Login</a></p>
         </div>
