@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import '../../CSS/Login.css'; 
 import axios from 'axios';
 import BASE_URL from '../../common/baseURL';
 
 function LoginPage() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -26,8 +29,12 @@ function LoginPage() {
     // Basic validation
     if (!formData.email || !formData.password) {
       setError('Please enter both email and password');
+      toast.error('Please enter both email and password');
       return;
     }
+    
+    // Show loading toast
+    const loadingToast = toast.loading('Logging in...');
     
     try {
       // Create FormData object to match backend expectations
@@ -41,16 +48,44 @@ function LoginPage() {
         }
       });
       
-      alert('Login successful!');
+      // Dismiss loading toast
+      toast.dismiss(loadingToast);
+      
+      // Show success toast
+      toast.success('Login successful! Welcome back!', {
+        duration: 2000,
+        style: {
+          background: '#10b981',
+          color: '#ffffff',
+        },
+      });
       
       // Store token and user data
       localStorage.setItem('access_token', response.data.access_token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       
       console.log('Login response:', response.data);
-      // Redirect user or update UI here
+      
+      // Navigate to LandingPage after a brief delay to show the toast
+      setTimeout(() => {
+        navigate('/');
+      }, 1500);
+      
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed');
+      // Dismiss loading toast
+      toast.dismiss(loadingToast);
+      
+      const errorMessage = err.response?.data?.detail || 'Login failed';
+      setError(errorMessage);
+      
+      // Show error toast
+      toast.error(errorMessage, {
+        duration: 4000,
+        style: {
+          background: '#ef4444',
+          color: '#ffffff',
+        },
+      });
     }
   };
 
