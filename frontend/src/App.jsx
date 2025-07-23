@@ -4,10 +4,11 @@ import { Toaster } from 'react-hot-toast';
 import Login from './components/Auth/Login'; // Adjust the path as needed
 import Register from './components/Auth/Register';
 // import Dashboard from './components/Dashboard';
-import Home from './LandingPage'; // Adjust the path as needed
+import LandingPage from './LandingPage'; // Adjust the path as needed
 import ColorblindTest from './components/Eye_Pages/ColorblindTest';
 import EyeTracking from './components/Eye_Pages/Eye_Tracking';
 import Dashboard from './components/Admin/Dashboard'; 
+import Home from './Home';
 
 function App() {
   return (
@@ -16,7 +17,8 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
         {/* <Route path="/dashboard" element={<Dashboard />} /> */}
-        <Route path="/" element={<Home />} /> 
+        <Route path="/" element={<LandingPage />} /> 
+        <Route path="/home" element={<Home />} />
         <Route path="/eye-tracking" element={<EyeTracking />} />
         <Route path="/colorblind-test" element={<ColorblindTest />} />
         <Route path="/admin/dashboard" element={<Dashboard />} />
