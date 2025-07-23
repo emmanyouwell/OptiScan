@@ -82,12 +82,52 @@ const ColorBlindTest = () => {
     }
   };
 
+  const typeMap = {
+    "1": "protanopia",
+    "2": "deuteranopia",
+    "3": "tritanopia"
+  };
+
   const analyzeAndSave = async () => {
     setShowAnalysis(true);
 
-    const wrong = answers.filter(a => !a.is_correct).length + (userAnswer !== imageList[MAX_PLATES - 1].label.toString() ? 1 : 0);
+    // Tally wrong answers by hidden_from type
+    const typeCounts = { protanopia: 0, deuteranopia: 0, tritanopia: 0 };
+    // Add the last answer (not yet in answers array)
+    const allAnswers = [
+      ...answers,
+      {
+        plate_number: MAX_PLATES,
+        correct_answer: imageList[MAX_PLATES - 1].label.toString(),
+        user_answer: userAnswer,
+        is_correct: userAnswer === imageList[MAX_PLATES - 1].label.toString()
+      }
+    ];
+
+    allAnswers.forEach((ans, idx) => {
+      if (!ans.is_correct) {
+        // Get hidden_from type from imageList
+        const plate = imageList[idx];
+        const typeId = plate.type?.toString();
+        const hiddenType = typeMap[typeId];
+        if (hiddenType) typeCounts[hiddenType]++;
+      }
+    });
+
+    // Find the type with the highest count
     let suspected_type = "normal";
-    if (wrong > 4) suspected_type = "protanopia";
+    let maxCount = 0;
+    Object.entries(typeCounts).forEach(([type, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        suspected_type = type;
+      }
+    });
+    // Optionally, set a threshold for "normal"
+    if (maxCount < 3) suspected_type = "normal";
+
+    const total_wrong = allAnswers.filter(a => !a.is_correct).length;
+    const total_correct = allAnswers.filter(a => a.is_correct).length;
 
     let userId = null;
     try {
@@ -111,34 +151,84 @@ const ColorBlindTest = () => {
 
     const payload = {
       user_id: userId,
-      plates: [
-        ...answers,
-        {
-          plate_number: MAX_PLATES,
-          correct_answer: imageList[MAX_PLATES - 1].label.toString(),
-          user_answer: userAnswer,
-          is_correct: userAnswer === imageList[MAX_PLATES - 1].label.toString()
-        }
-      ],
+      plates: allAnswers,
       suspected_type,
-      confidence: Math.max(0, 100 - wrong * 7),
+      confidence: Math.max(0, 100 - total_wrong * 7),
       device_info: { os: window.navigator.platform }
     };
 
     setAnalysis({
       suspected_type,
       confidence: payload.confidence,
-      total_correct: payload.plates.filter(p => p.is_correct).length,
-      total_wrong: payload.plates.filter(p => !p.is_correct).length
+      total_correct,
+      total_wrong
     });
 
     try {
-      await axios.post("http://localhost:8000/api/colorblindness/save-result", payload); 
+      await axios.post("http://localhost:8000/api/colorblindness/save-result", payload);
     } catch (e) {
       console.error("Error saving results:", e);
       alert("Error saving results. Please try again later.");
     }
   };
+  // OG
+  // const analyzeAndSave = async () => {
+  //   setShowAnalysis(true);
+
+  //   const wrong = answers.filter(a => !a.is_correct).length + (userAnswer !== imageList[MAX_PLATES - 1].label.toString() ? 1 : 0);
+  //   let suspected_type = "normal";
+  //   if (wrong > 4) suspected_type = "protanopia";
+
+  //   let userId = null;
+  //   try {
+  //     const userData = localStorage.getItem("user");
+  //     if (userData) {
+  //       const userObj = JSON.parse(userData);
+  //       const candidateId = userObj?.id || userObj?.id || null;
+  //       if (candidateId && /^[0-9a-fA-F]{24}$/.test(candidateId)) {
+  //         userId = candidateId;
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error("Error parsing user data from localStorage:", error);
+  //     alert("Error retrieving user data. Please login again.");
+  //     return;
+  //   }
+  //   if (!userId) {
+  //     alert("Error: User ID is invalid or missing. Please login again.");
+  //     return;
+  //   }
+
+  //   const payload = {
+  //     user_id: userId,
+  //     plates: [
+  //       ...answers,
+  //       {
+  //         plate_number: MAX_PLATES,
+  //         correct_answer: imageList[MAX_PLATES - 1].label.toString(),
+  //         user_answer: userAnswer,
+  //         is_correct: userAnswer === imageList[MAX_PLATES - 1].label.toString()
+  //       }
+  //     ],
+  //     suspected_type,
+  //     confidence: Math.max(0, 100 - wrong * 7),
+  //     device_info: { os: window.navigator.platform }
+  //   };
+
+  //   setAnalysis({
+  //     suspected_type,
+  //     confidence: payload.confidence,
+  //     total_correct: payload.plates.filter(p => p.is_correct).length,
+  //     total_wrong: payload.plates.filter(p => !p.is_correct).length
+  //   });
+
+  //   try {
+  //     await axios.post("http://localhost:8000/api/colorblindness/save-result", payload); 
+  //   } catch (e) {
+  //     console.error("Error saving results:", e);
+  //     alert("Error saving results. Please try again later.");
+  //   }
+  // };
 
 
   const handleNumpadClick = (num) => {
@@ -221,7 +311,7 @@ const ColorBlindTest = () => {
             fontWeight: 500,
             letterSpacing: "1px"
           }}>
-            
+
             <span>
               Your Answer: <span style={{ color: "#222" }}>{userAnswer}</span>
             </span>
