@@ -7,6 +7,7 @@ import Register from './components/Auth/Register';
 import Home from './LandingPage'; // Adjust the path as needed
 import ColorblindTest from './components/Eye_Pages/ColorblindTest';
 import EyeTracking from './components/Eye_Pages/Eye_Tracking';
+import Dashboard from './components/Admin/Dashboard'; 
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/" element={<Home />} /> 
         <Route path="/eye-tracking" element={<EyeTracking />} />
         <Route path="/colorblind-test" element={<ColorblindTest />} />
+        <Route path="/admin/dashboard" element={<Dashboard />} />
 
         <Route path="*" element={<div>404 Not Found</div>} />
       </Routes>
