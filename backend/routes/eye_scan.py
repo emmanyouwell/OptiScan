@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List
 import logging
+from bson import ObjectId
 
 from models.eye_scan import EyeScanRequest, EyeScanResponse, EyeScanData
 from utils.ai_processor import ai_processor  # Import from utils
@@ -10,6 +11,119 @@ from config.db import db
 
 router = APIRouter()
 eye_scans_collection = db.eye_scans
+
+@router.get("/user-scans")
+async def get_user_scans(
+    current_user: dict = Depends(get_current_user),
+    limit: int = Query(10, ge=1, le=50),
+    skip: int = Query(0, ge=0)
+):
+    """Get all scan results for the current user"""
+    
+    try:
+        user_id = str(current_user["_id"])
+        
+        # Get total count
+        total_count = eye_scans_collection.count_documents({"user_id": user_id})
+        
+        # Get scans with pagination
+        scans_cursor = eye_scans_collection.find(
+            {"user_id": user_id}
+        ).sort("timestamp", -1).skip(skip).limit(limit)
+        
+        scans = []
+        for scan in scans_cursor:
+            scan["_id"] = str(scan["_id"])
+            scans.append(scan)
+        
+        return {
+            "scans": scans,
+            "total_count": total_count,
+            "current_page": (skip // limit) + 1,
+            "total_pages": (total_count + limit - 1) // limit,
+            "has_more": skip + limit < total_count
+        }
+        
+    except Exception as e:
+        logging.error(f"❌ Failed to fetch user scans: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch scans: {str(e)}")
+
+@router.get("/scan/{scan_id}")
+async def get_scan_by_id(
+    scan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a specific scan by ID"""
+    
+    try:
+        # Validate scan_id format
+        if not ObjectId.is_valid(scan_id):
+            raise HTTPException(status_code=400, detail="Invalid scan ID format")
+        
+        # Find the scan
+        scan = eye_scans_collection.find_one({
+            "_id": ObjectId(scan_id),
+            "user_id": str(current_user["_id"])
+        })
+        
+        if not scan:
+            raise HTTPException(status_code=404, detail="Scan not found")
+        
+        # Convert ObjectId to string
+        scan["_id"] = str(scan["_id"])
+        
+        return {
+            "scan": scan,
+            "user_info": {
+                "username": current_user.get("username"),
+                "email": current_user.get("email"),
+                "age": current_user.get("age"),
+                "gender": current_user.get("gender")
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"❌ Failed to fetch scan {scan_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch scan: {str(e)}")
+
+@router.get("/latest-scan")
+async def get_latest_scan(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get the most recent scan for the current user"""
+    
+    try:
+        user_id = str(current_user["_id"])
+        
+        # Find the latest scan
+        latest_scan = eye_scans_collection.find_one(
+            {"user_id": user_id},
+            sort=[("timestamp", -1)]
+        )
+        
+        if not latest_scan:
+            raise HTTPException(status_code=404, detail="No scans found for user")
+        
+        # Convert ObjectId to string
+        latest_scan["_id"] = str(latest_scan["_id"])
+        
+        return {
+            "scan": latest_scan,
+            "user_info": {
+                "username": current_user.get("username"),
+                "email": current_user.get("email"),
+                "age": current_user.get("age"),
+                "gender": current_user.get("gender")
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"❌ Failed to fetch latest scan: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch latest scan: {str(e)}")
 
 @router.post("/analyze", response_model=EyeScanResponse)
 async def analyze_eye_scan(
