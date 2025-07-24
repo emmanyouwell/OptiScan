@@ -5,6 +5,7 @@ import '../../CSS/Login.css';
 import axios from 'axios';
 import BASE_URL from '../../common/baseURL';
 
+
 function LoginPage() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -26,18 +27,15 @@ function LoginPage() {
     e.preventDefault();
     setError('');
     
-    // Basic validation
     if (!formData.email || !formData.password) {
       setError('Please enter both email and password');
       toast.error('Please enter both email and password');
       return;
     }
     
-    // Show loading toast
     const loadingToast = toast.loading('Logging in...');
     
     try {
-      // Create FormData object to match backend expectations
       const formDataToSend = new FormData();
       formDataToSend.append('email', formData.email);
       formDataToSend.append('password', formData.password);
@@ -48,10 +46,9 @@ function LoginPage() {
         }
       });
       
-      // Dismiss loading toast
       toast.dismiss(loadingToast);
       
-      // Show success toast
+
       toast.success('Login successful! Welcome back!', {
         duration: 2000,
         style: {
@@ -68,7 +65,7 @@ function LoginPage() {
       
       // Navigate to LandingPage after a brief delay to show the toast
       setTimeout(() => {
-        navigate('/');
+        navigate('/home');
       }, 1500);
       
     } catch (err) {
@@ -91,10 +88,11 @@ function LoginPage() {
 
   return (
     <div className="login-container">
+
       <div className="login-form-wrapper">
         <h1>Login</h1>
         
-        {error && <div className="error-message">{error}</div>}
+        {/* {error && <div className="error-message">{error}</div>} */}
         
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">

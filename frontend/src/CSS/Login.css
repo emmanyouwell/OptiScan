@@ -19,7 +19,8 @@ body {
   display: flex;
   justify-content: center;   /* centers horizontally */
   align-items: center;       /* centers vertically */
-  background-color: #F4F1EE;
+  /* background-color: #F4F1EE; */
+   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -52,7 +53,7 @@ label {
   color: #000000 !important;
 }
 
-input {
+/* input {
   width: 100%;
   padding: 12px;
   border: 1px solid #BDB6B0;
@@ -60,25 +61,36 @@ input {
   font-size: 16px;
   transition: border-color 0.2s;
   background-color: #FFFFFF;
-  color: #222222;
+  color: white;
+  box-sizing: border-box;
+} */
+input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #BDB6B0;
+  border-radius: 4px;
+  font-size: 16px;
+  transition: border-color 0.2s;
+  background-color: #f5f7fa; 
+  color: #3498db;
   box-sizing: border-box;
 }
 
 input:focus {
   outline: none;
-  border-color: #388E3C;
+  border-color: #f5f7fa;
 }
 
 input::placeholder {
-  color: #8D8D8D;
+  color: #f5f7fa;
 }
 
 .login-button {
   width: 100%;
   padding: 12px;
-  background-color: #388E3C;
-  color: #FFFFFF;
-  border: none;
+  background-color: white;
+  color: #3498db;
+   border: 1px solid #007bff;
   border-radius: 4px;
   font-size: 16px;
   cursor: pointer;
@@ -87,7 +99,8 @@ input::placeholder {
 }
 
 .login-button:hover {
-  background-color: #2E7031;
+  background: #3498db;
+  color: white;
 }
 
 .error-message {
@@ -106,13 +119,13 @@ input::placeholder {
 }
 
 .additional-options a {
-  color: #1565C0;
+  color: #3498db;
   text-decoration: none;
 }
 
 .additional-options a:hover {
   text-decoration: underline;
-  color: #388E3C;
+  color: #007bff;
 }
 
 .additional-options p {
