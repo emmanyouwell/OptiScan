@@ -3,12 +3,12 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import BASE_URL from '../../common/baseURL';
 import '../../CSS/LandingPage.css';
-import { useNavigate } from 'react-router-dom'; 
+import { useNavigate } from 'react-router-dom';
 export default function UserNavBar() {
 
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const navigate = useNavigate(); 
+    const navigate = useNavigate();
 
     useEffect(() => {
         const checkAuthStatus = async () => {
@@ -45,7 +45,7 @@ export default function UserNavBar() {
         localStorage.removeItem('user');
         setUser(null);
         toast.success('Logged out successfully');
-         navigate('/');
+        navigate('/');
     };
 
     if (loading) {
@@ -69,7 +69,16 @@ export default function UserNavBar() {
                     <span></span>
                     <a href="/eye-conditions">Eye Conditions</a>
                     <span></span>
-                    <a href="/about">Eye Test</a>
+                    {/* <a href="/about">Eye Test</a>
+                    <span></span> */}
+                    <div className="dropdown">
+                        <button className="dropbtn">Eye Test</button>
+                        <div className="dropdown-content">
+                            <a href="/eye-tracking">Eye Tracking</a>
+                            <a href="/colorblind-test">Color Blind</a>
+                            <a href="/dry-eye-test">Dry Eye</a>
+                        </div>
+                    </div>
                     <span></span>
                     <a href="/about">Clinics</a>
                     <span></span>

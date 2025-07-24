@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import UserNavBar from '../layouts/UserNavBar';
+import '../../CSS/ColorBlindTest.css'; // Import the CSS file
 
 const MAX_PLATES = 14;
 
@@ -28,7 +30,6 @@ const ColorBlindTest = () => {
       });
   }, []);
 
-
   useEffect(() => {
     if (imageList.length === 0) return;
     const fetchAndPredict = async () => {
@@ -36,7 +37,6 @@ const ColorBlindTest = () => {
       setPredictedNumber('');
       setUserAnswer('');
       try {
-
         const imgUrl = `http://localhost:8000${imageList[currentIndex].url}`;
         const imgRes = await fetch(imgUrl);
         const imgBlob = await imgRes.blob();
@@ -49,7 +49,6 @@ const ColorBlindTest = () => {
           { headers: { 'Content-Type': 'multipart/form-data' } }
         );
         setPredictedNumber(res.data.predicted_number?.toString() ?? '');
-        // setUserAnswer(res.data.predicted_number?.toString() ?? '');
       } catch (err) {
         setPredictedNumber('');
         setUserAnswer('');
@@ -57,7 +56,6 @@ const ColorBlindTest = () => {
       setLoadingPrediction(false);
     };
     fetchAndPredict();
-
   }, [currentIndex, imageList.length]);
 
   const handleSubmit = () => {
@@ -91,9 +89,7 @@ const ColorBlindTest = () => {
   const analyzeAndSave = async () => {
     setShowAnalysis(true);
 
-    // Tally wrong answers by hidden_from type
     const typeCounts = { protanopia: 0, deuteranopia: 0, tritanopia: 0 };
-    // Add the last answer (not yet in answers array)
     const allAnswers = [
       ...answers,
       {
@@ -106,7 +102,6 @@ const ColorBlindTest = () => {
 
     allAnswers.forEach((ans, idx) => {
       if (!ans.is_correct) {
-        // Get hidden_from type from imageList
         const plate = imageList[idx];
         const typeId = plate.type?.toString();
         const hiddenType = typeMap[typeId];
@@ -114,7 +109,6 @@ const ColorBlindTest = () => {
       }
     });
 
-    // Find the type with the highest count
     let suspected_type = "normal";
     let maxCount = 0;
     Object.entries(typeCounts).forEach(([type, count]) => {
@@ -123,7 +117,6 @@ const ColorBlindTest = () => {
         suspected_type = type;
       }
     });
-    // Optionally, set a threshold for "normal"
     if (maxCount < 3) suspected_type = "normal";
 
     const total_wrong = allAnswers.filter(a => !a.is_correct).length;
@@ -172,7 +165,6 @@ const ColorBlindTest = () => {
     }
   };
 
-
   const handleNumpadClick = (num) => {
     setUserAnswer(prev => prev + num);
   };
@@ -181,172 +173,100 @@ const ColorBlindTest = () => {
     setUserAnswer('');
   };
 
-  if (imageList.length === 0) return <p style={{ fontSize: "2em", textAlign: "center" }}>Loading images...</p>;
+  if (imageList.length === 0) {
+    return <div className="colorblind-loading">Loading images...</div>;
+  }
 
   if (showAnalysis && analysis) {
     return (
-      <div style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%)"
-      }}>
-        <div style={{
-          background: "#fff",
-          borderRadius: "32px",
-          boxShadow: "0 8px 32px rgba(60,60,60,0.15)",
-          padding: "48px 64px",
-          textAlign: "center"
-        }}>
-          <h2>Test Complete!</h2>
-          <p style={{ fontSize: "1.3em" }}>
-            <b>Suspected Type:</b> {analysis.suspected_type}
-            <br />
-            <b>Confidence:</b> {analysis.confidence}%
-            <br />
-            <b>Correct:</b> {analysis.total_correct} / {MAX_PLATES}
-            <br />
-            <b>Incorrect:</b> {analysis.total_wrong}
-          </p>
+      <>
+      <UserNavBar />
+      <div className="colorblind-analysis-container">
+        <div className="colorblind-analysis-card">
+          <h2 className="colorblind-analysis-title">Test Complete!</h2>
+          <div className="colorblind-analysis-content">
+            <div className="colorblind-analysis-item">
+              <span className="colorblind-analysis-label">Suspected Type:</span>{' '}
+              <span className="colorblind-analysis-value">{analysis.suspected_type}</span>
+            </div>
+            <div className="colorblind-analysis-item">
+              <span className="colorblind-analysis-label">Confidence:</span>{' '}
+              <span className="colorblind-analysis-value">{analysis.confidence}%</span>
+            </div>
+            <div className="colorblind-analysis-item">
+              <span className="colorblind-analysis-label">Correct:</span>{' '}
+              <span className="colorblind-analysis-value">{analysis.total_correct} / {MAX_PLATES}</span>
+            </div>
+            <div className="colorblind-analysis-item">
+              <span className="colorblind-analysis-label">Incorrect:</span>{' '}
+              <span className="colorblind-analysis-value">{analysis.total_wrong}</span>
+            </div>
+          </div>
         </div>
       </div>
+      </>
     );
   }
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%)"
-    }}>
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "60px",
-        background: "#fff",
-        borderRadius: "32px",
-        boxShadow: "0 8px 32px rgba(60,60,60,0.15)",
-        padding: "48px 64px"
-      }}>
-        <div>
-          <img
-            src={`http://localhost:8000${imageList[currentIndex].url}`}
-            alt="Ishihara Plate"
-            style={{
-              width: "420px",
-              height: "420px",
-              objectFit: "contain",
-              border: "3px solid #b3b3b3",
-              background: "#fff",
-              borderRadius: "24px",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.07)"
-            }}
-          />
-          <div style={{
-            marginTop: "18px",
-            fontSize: "1.6em",
-            textAlign: "center",
-            fontWeight: 500,
-            letterSpacing: "1px"
-          }}>
-
-            <span>
-              Your Answer: <span style={{ color: "#222" }}>{userAnswer}</span>
-            </span>
+    <>
+      <UserNavBar />
+      <div className="colorblind-container">
+        <div className="colorblind-test-card">
+          <div className="colorblind-image-section">
+            <img
+              src={`http://localhost:8000${imageList[currentIndex].url}`}
+              alt="Ishihara Plate"
+              className="colorblind-image"
+            />
+            <div className="colorblind-answer-display">
+              Your Answer: <span className="colorblind-answer-text">{userAnswer}</span>
+            </div>
+            <div className="colorblind-plate-counter">
+              Plate {currentIndex + 1} of {MAX_PLATES}
+            </div>
           </div>
-          <div style={{ textAlign: "center", marginTop: "10px", color: "#888" }}>
-            Plate {currentIndex + 1} of {MAX_PLATES}
-          </div>
-        </div>
-        <div>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 90px)",
-            gridTemplateRows: "repeat(4, 90px)",
-            gap: "18px",
-            marginBottom: "24px"
-          }}>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+          
+          <div className="colorblind-controls-section">
+            <div className="colorblind-numpad">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                <button
+                  key={num}
+                  className="colorblind-numpad-button"
+                  onClick={() => handleNumpadClick(num.toString())}
+                >
+                  {num}
+                </button>
+              ))}
+              <div></div>
               <button
-                key={num}
-                style={{
-                  fontSize: "2.2em",
-                  width: "90px",
-                  height: "90px",
-                  borderRadius: "18px",
-                  border: "2px solid #888",
-                  background: "#000000ff",
-                  cursor: "pointer",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                  transition: "background 0.2s"
-                }}
-                onClick={() => handleNumpadClick(num.toString())}
+                className="colorblind-numpad-button"
+                onClick={() => handleNumpadClick("0")}
               >
-                {num}
+                0
               </button>
-            ))}
-            <div></div>
-            <button
-              style={{
-                fontSize: "2.2em",
-                width: "90px",
-                height: "90px",
-                borderRadius: "18px",
-                border: "2px solid #888",
-                background: "#000000ff",
-                cursor: "pointer",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                transition: "background 0.2s"
-              }}
-              onClick={() => handleNumpadClick("0")}
-            >
-              0
-            </button>
-            <div></div>
-          </div>
-          <div style={{ display: "flex", gap: "18px", justifyContent: "center" }}>
-            <button
-              onClick={handleClear}
-              style={{
-                padding: "14px 32px",
-                fontSize: "1.3em",
-                borderRadius: "10px",
-                border: "2px solid #e23c3c",
-                background: "#ffecec",
-                color: "#e23c3c",
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "background 0.2s"
-              }}
-            >
-              Clear
-            </button>
-            <button
-              onClick={handleSubmit}
-              style={{
-                padding: "14px 32px",
-                fontSize: "1.3em",
-                borderRadius: "10px",
-                border: "2px solid #1bc41b",
-                background: "#eaffea",
-                color: "#1bc41b",
-                fontWeight: 600,
-                cursor: userAnswer === '' ? "not-allowed" : "pointer",
-                opacity: userAnswer === '' ? 0.6 : 1,
-                transition: "background 0.2s"
-              }}
-              disabled={userAnswer === ''}
-            >
-              Submit
-            </button>
+              <div></div>
+            </div>
+            
+            <div className="colorblind-action-buttons">
+              <button
+                onClick={handleClear}
+                className="colorblind-btn colorblind-btn-clear"
+              >
+                Clear
+              </button>
+              <button
+                onClick={handleSubmit}
+                className="colorblind-btn colorblind-btn-submit"
+                disabled={userAnswer === ''}
+              >
+                Submit
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

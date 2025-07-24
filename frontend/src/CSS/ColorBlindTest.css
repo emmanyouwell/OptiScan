@@ -1,0 +1,298 @@
+/* ColorBlindTest.css */
+
+/* Loading state */
+.colorblind-loading {
+  font-size: 2em;
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
+/* Main container */
+.colorblind-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%); */
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  padding: 20px;
+}
+
+/* Test card */
+.colorblind-test-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 60px;
+  background: #fff;
+  border-radius: 32px;
+  box-shadow: 0 8px 32px rgba(60, 60, 60, 0.15);
+  padding: 48px 64px;
+  max-width: 1200px;
+  width: 100%;
+}
+
+/* Image section */
+.colorblind-image-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.colorblind-image {
+  width: 420px;
+  height: 420px;
+  object-fit: contain;
+  border: 3px solid #b3b3b3;
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+}
+
+.colorblind-answer-display {
+  margin-top: 18px;
+  font-size: 1.6em;
+  text-align: center;
+  font-weight: 500;
+  letter-spacing: 1px;
+  color: #555;
+}
+
+.colorblind-answer-text {
+  color: #222;
+}
+
+.colorblind-plate-counter {
+  text-align: center;
+  margin-top: 10px;
+  color: #888;
+  font-size: 1.1em;
+}
+
+/* Numpad section */
+.colorblind-controls-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.colorblind-numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 90px);
+  grid-template-rows: repeat(4, 90px);
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.colorblind-numpad-button {
+  font-size: 2.2em;
+  width: 90px;
+  height: 90px;
+  border-radius: 18px;
+  border: 2px solid #888;
+  background: #f8f9fa;
+  color: #333;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 0.2s ease;
+  font-weight: 600;
+}
+
+.colorblind-numpad-button:hover {
+  background: #e9ecef;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.colorblind-numpad-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* Action buttons */
+.colorblind-action-buttons {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+}
+
+.colorblind-btn {
+  padding: 14px 32px;
+  font-size: 1.3em;
+  border-radius: 10px;
+  border: 2px solid;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+}
+
+.colorblind-btn-clear {
+  border-color: #e23c3c;
+  background: #ffecec;
+  color: #e23c3c;
+}
+
+.colorblind-btn-clear:hover {
+  background: #ffd6d6;
+  transform: translateY(-1px);
+}
+
+.colorblind-btn-submit {
+  border-color: #1bc41b;
+  background: #eaffea;
+  color: #1bc41b;
+}
+
+.colorblind-btn-submit:hover:not(:disabled) {
+  background: #d4f8d4;
+  transform: translateY(-1px);
+}
+
+.colorblind-btn-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: #f5f5f5;
+  color: #999;
+  border-color: #ccc;
+}
+
+/* Analysis results */
+.colorblind-analysis-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
+  padding: 20px;
+}
+
+.colorblind-analysis-card {
+  background: #fff;
+  border-radius: 32px;
+  box-shadow: 0 8px 32px rgba(60, 60, 60, 0.15);
+  padding: 48px 64px;
+  text-align: center;
+  max-width: 600px;
+  width: 100%;
+}
+
+.colorblind-analysis-title {
+  color: #333;
+  font-size: 2.5em;
+  margin-bottom: 24px;
+  font-weight: 700;
+}
+
+.colorblind-analysis-content {
+  font-size: 1.3em;
+  line-height: 1.8;
+  color: #555;
+}
+
+.colorblind-analysis-item {
+  margin-bottom: 12px;
+}
+
+.colorblind-analysis-label {
+  font-weight: 600;
+  color: #333;
+}
+
+.colorblind-analysis-value {
+  color: #007bff;
+}
+
+/* Responsive design */
+@media (max-width: 1024px) {
+  .colorblind-test-card {
+    flex-direction: column;
+    gap: 40px;
+    padding: 32px 24px;
+  }
+  
+  .colorblind-image {
+    width: 320px;
+    height: 320px;
+  }
+}
+
+@media (max-width: 768px) {
+  .colorblind-container {
+    padding: 10px;
+  }
+  
+  .colorblind-test-card {
+    padding: 24px 16px;
+    gap: 30px;
+  }
+  
+  .colorblind-image {
+    width: 280px;
+    height: 280px;
+  }
+  
+  .colorblind-answer-display {
+    font-size: 1.4em;
+  }
+  
+  .colorblind-numpad {
+    grid-template-columns: repeat(3, 70px);
+    grid-template-rows: repeat(4, 70px);
+    gap: 12px;
+  }
+  
+  .colorblind-numpad-button {
+    width: 70px;
+    height: 70px;
+    font-size: 1.8em;
+  }
+  
+  .colorblind-btn {
+    padding: 12px 24px;
+    font-size: 1.1em;
+    min-width: 100px;
+  }
+  
+  .colorblind-analysis-card {
+    padding: 32px 24px;
+  }
+  
+  .colorblind-analysis-title {
+    font-size: 2em;
+  }
+  
+  .colorblind-analysis-content {
+    font-size: 1.1em;
+  }
+}
+
+@media (max-width: 480px) {
+  .colorblind-image {
+    width: 240px;
+    height: 240px;
+  }
+  
+  .colorblind-numpad {
+    grid-template-columns: repeat(3, 60px);
+    grid-template-rows: repeat(4, 60px);
+    gap: 10px;
+  }
+  
+  .colorblind-numpad-button {
+    width: 60px;
+    height: 60px;
+    font-size: 1.5em;
+  }
+  
+  .colorblind-action-buttons {
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+  
+  .colorblind-btn {
+    width: 100%;
+  }
+}
