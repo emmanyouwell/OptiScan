@@ -11,11 +11,11 @@ body {
   color: #333;
 }
 
-.container {
+/* .container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 20px;
-}
+} */
 
 /* Loading */
 .loading {
@@ -180,7 +180,7 @@ body {
 }
 
 .btn-primary {
-  background: #007bff;
+  background: #3498db;
   color: white;
   border: none;
   padding: 0.75rem 1.5rem;
@@ -192,6 +192,7 @@ body {
 
 .btn-primary:hover {
   background: #0056b3;
+  color: white;
 }
 
 .btn-secondary {
@@ -206,7 +207,7 @@ body {
 }
 
 .btn-secondary:hover {
-  background: #007bff;
+  background: #3498db;
   color: white;
 }
 

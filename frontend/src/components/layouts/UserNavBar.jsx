@@ -3,8 +3,6 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import BASE_URL from '../../common/baseURL';
 import '../../CSS/LandingPage.css';
-import { redirect } from 'react-router-dom';
-import LandingPage from '../../LandingPage';
 import { useNavigate } from 'react-router-dom'; 
 export default function UserNavBar() {
 
@@ -67,11 +65,13 @@ export default function UserNavBar() {
                 </div>
 
                 <nav className="nav">
-                    <a href="/">Home</a>
+                    <a href="/home">Home</a>
                     <span></span>
                     <a href="/eye-conditions">Eye Conditions</a>
                     <span></span>
                     <a href="/about">Eye Test</a>
+                    <span></span>
+                    <a href="/about">Clinics</a>
                     <span></span>
                     <a href="/contact">History</a>
                 </nav>

@@ -51,7 +51,7 @@ export default function Home() {
     <>
       <UserNavBar />
       {/* Add your Home page content here */}
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
+      <div style={{ padding: '2rem', textAlign: 'center', background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
         <h1>Welcome back, {user?.username || 'User'}!</h1>
         <p>Start scanning or explore your dashboard.</p>
       </div>
