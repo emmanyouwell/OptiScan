@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import users, eye_tracking, mediapipe, colorblindness, ashihara_plates
+from routes import users, eye_tracking, mediapipe, colorblindness, ashihara_plates, eye_scan
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 import os
@@ -24,6 +24,7 @@ api_app.include_router(mediapipe.router, prefix="/mediapipe")  # Add this line
 api_app.include_router(colorblindness.router, prefix="/colorblindness") 
 # api_app.include_router(colorblindness.router, prefix="/colorblindness")
 api_app.include_router(ashihara_plates.router, prefix="/plates")
+api_app.include_router(eye_scan.router, prefix="/eye-scan")
 
 app = FastAPI()
 

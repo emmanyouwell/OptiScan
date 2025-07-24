@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -24,6 +24,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import baseURL from '../../assets/common/baseURL';
 
 const { width, height } = Dimensions.get('window');
 
@@ -44,14 +47,132 @@ export default function Eye_Scan({ navigation }) {
   const [gender, setGender] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [modelStatus, setModelStatus] = useState('checking');
+  const [userInfo, setUserInfo] = useState(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
 
-  // Request camera/gallery permissions
+  // Check model status and fetch user info on component mount
+  useEffect(() => {
+    checkModelStatus();
+    loadUserFromStorage();
+  }, []);
+
+  const checkModelStatus = async () => {
+    try {
+      const response = await axios.get(`${baseURL}/api/eye-scan/health`);
+      
+      if (response.data.ai_models_loaded > 0) {
+        setModelStatus('ready');
+      } else {
+        setModelStatus('error');
+      }
+    } catch (error) {
+      console.error('Failed to check model status:', error);
+      setModelStatus('error');
+    }
+  };
+
+  // Load user information from AsyncStorage
+  const loadUserFromStorage = async () => {
+    try {
+      setIsLoadingUser(true);
+      
+      // Get the stored login response
+      const storedData = await AsyncStorage.getItem('loginResponse');
+      
+      if (storedData) {
+        const loginData = JSON.parse(storedData);
+        const user = loginData.user;
+        
+        if (user) {
+          setUserInfo(user);
+          
+          // Auto-fill user data from AsyncStorage
+          if (user.age) {
+            setAge(user.age.toString());
+          }
+          if (user.gender) {
+            setGender(user.gender.toLowerCase());
+          }
+          
+          console.log('✅ User info loaded from storage:', user.username);
+          console.log('📋 User details:', {
+            username: user.username,
+            age: user.age,
+            gender: user.gender,
+            email: user.email
+          });
+        }
+      } else {
+        console.log('❌ No login data found in storage');
+        // If no login data, try to get user info separately
+        const userInfoData = await AsyncStorage.getItem('userInfo');
+        if (userInfoData) {
+          const user = JSON.parse(userInfoData);
+          setUserInfo(user);
+          if (user.age) setAge(user.age.toString());
+          if (user.gender) setGender(user.gender.toLowerCase());
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error loading user info from storage:', error);
+    } finally {
+      setIsLoadingUser(false);
+    }
+  };
+
+  // Convert image to base64
+  const convertToBase64 = async (imageUri) => {
+    try {
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error('Base64 conversion failed:', error);
+      throw error;
+    }
+  };
+
+  // Get authentication token from AsyncStorage
+  const getAuthToken = async () => {
+    try {
+      // First try to get from loginResponse
+      const loginResponse = await AsyncStorage.getItem('loginResponse');
+      if (loginResponse) {
+        const loginData = JSON.parse(loginResponse);
+        if (loginData.access_token) {
+          console.log('🔑 Token retrieved from loginResponse');
+          return loginData.access_token;
+        }
+      }
+      
+      // Fallback to authToken key
+      const token = await AsyncStorage.getItem('authToken');
+      if (token) {
+        console.log('🔑 Token retrieved from authToken');
+        return token;
+      }
+      
+      throw new Error('No authentication token found. Please login again.');
+    } catch (error) {
+      console.error('❌ Auth token error:', error);
+      throw new Error('Authentication required. Please login again.');
+    }
+  };
+
+  // Request permissions
   const requestPermissions = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
         'Permission Required',
-        'Sorry, we need camera roll permissions to upload eye images.',
+        'Camera access is needed to capture eye images for analysis.',
         [{ text: 'OK' }]
       );
       return false;
@@ -59,11 +180,11 @@ export default function Eye_Scan({ navigation }) {
     return true;
   };
 
-  // Image picker options
+  // Image picker
   const showImagePicker = (eyeType) => {
     Alert.alert(
       'Select Image',
-      'Choose how you want to select an eye image',
+      'Choose how to capture the eye image',
       [
         {
           text: 'Camera',
@@ -77,12 +198,10 @@ export default function Eye_Scan({ navigation }) {
           text: 'Cancel',
           style: 'cancel',
         },
-      ],
-      { cancelable: true }
+      ]
     );
   };
 
-  // Pick image from camera or gallery
   const pickImage = async (eyeType, source) => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
@@ -93,6 +212,7 @@ export default function Eye_Scan({ navigation }) {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
+      base64: false,
     };
 
     if (source === 'camera') {
@@ -111,7 +231,6 @@ export default function Eye_Scan({ navigation }) {
     }
   };
 
-  // Remove image
   const removeImage = (eyeType) => {
     if (eyeType === 'left') {
       setLeftEyeImage(null);
@@ -120,21 +239,22 @@ export default function Eye_Scan({ navigation }) {
     }
   };
 
-  // Validate form
+  // Form validation
   const validateForm = () => {
     const errors = [];
     
     if (!leftEyeImage) errors.push('Left eye image is required');
     if (!rightEyeImage) errors.push('Right eye image is required');
     if (!age || isNaN(age) || age < 1 || age > 120) {
-      errors.push('Please enter a valid age (1-120)');
+      errors.push('Valid age (1-120) is required');
     }
-    if (!gender) errors.push('Please select a gender');
+    if (!gender) errors.push('Gender selection is required');
+    if (modelStatus !== 'ready') errors.push('AI model is not ready');
 
     return errors;
   };
 
-  // Submit scan
+  // Submit scan for AI analysis
   const handleSubmitScan = async () => {
     const errors = validateForm();
     
@@ -147,38 +267,74 @@ export default function Eye_Scan({ navigation }) {
     setUploadProgress(0);
 
     try {
-      // Simulate upload progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(progressInterval);
-            return 100;
-          }
-          return prev + 10;
-        });
-      }, 200);
+      // Get auth token from AsyncStorage
+      setUploadProgress(10);
+      const authToken = await getAuthToken();
+      console.log('🔐 Using auth token for API request');
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Convert images to base64
+      setUploadProgress(30);
+      console.log('🖼️ Converting left eye image to base64...');
+      const leftEyeBase64 = await convertToBase64(leftEyeImage);
+      
+      setUploadProgress(50);
+      console.log('🖼️ Converting right eye image to base64...');
+      const rightEyeBase64 = await convertToBase64(rightEyeImage);
 
-      // Clear progress interval
-      clearInterval(progressInterval);
+      // Prepare request with user data from AsyncStorage
+      setUploadProgress(70);
+      const requestData = {
+        left_eye_image: leftEyeBase64,
+        right_eye_image: rightEyeBase64,
+        age: parseInt(age), // Age from AsyncStorage or user input
+        gender: gender      // Gender from AsyncStorage or user selection
+      };
+
+      console.log('📤 Sending analysis request with data:', {
+        age: requestData.age,
+        gender: requestData.gender,
+        hasLeftImage: !!requestData.left_eye_image,
+        hasRightImage: !!requestData.right_eye_image
+      });
+
+      // Send to AI backend using axios
+      setUploadProgress(85);
+      const response = await axios.post(
+        `${baseURL}/api/eye-scan/analyze`,
+        requestData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+          },
+        }
+      );
+
       setUploadProgress(100);
+      const analysisResults = response.data;
+      console.log('✅ Analysis completed successfully');
 
-      // Show success and navigate to results
+      // Show success and navigate with user info
+      const userName = userInfo?.username || 'User';
       Alert.alert(
-        'Scan Submitted',
-        'Your eye scan has been submitted successfully. Processing results...',
+        'Analysis Complete',
+        `Hello ${userName}! 👋\n\nAI has analyzed your eye images for:\n• Diabetic Retinopathy\n• Glaucoma\n• Cataract\n• Normal Condition\n\nResults are ready for review.`,
         [
           {
             text: 'View Results',
             onPress: () => {
-              // Navigate to results screen or show results
-              console.log('Navigate to results with data:', {
-                leftEye: leftEyeImage,
-                rightEye: rightEyeImage,
-                age,
-                gender
+              navigation.navigate('EyeScanResults', {
+                scanData: {
+                  scanId: analysisResults.scan_id,
+                  leftEye: leftEyeImage,
+                  rightEye: rightEyeImage,
+                  age: parseInt(age),
+                  gender: gender,
+                  results: analysisResults,
+                  userInfo: userInfo, // Pass complete user info
+                  username: userName,
+                  timestamp: new Date().toISOString()
+                }
               });
             }
           }
@@ -186,11 +342,110 @@ export default function Eye_Scan({ navigation }) {
       );
 
     } catch (error) {
-      Alert.alert('Error', 'Failed to submit scan. Please try again.');
+      console.error('❌ AI analysis failed:', error);
+      
+      let errorMessage = 'Failed to analyze images. Please try again.';
+      
+      if (error.response) {
+        if (error.response.status === 401) {
+          errorMessage = 'Authentication failed. Please login again.';
+          // Navigate to login if auth fails
+          setTimeout(() => {
+            navigation.navigate('Login');
+          }, 2000);
+        } else if (error.response.data?.detail) {
+          errorMessage = error.response.data.detail;
+        }
+      } else if (error.message.includes('Authentication required')) {
+        errorMessage = 'Please login to continue with the analysis.';
+        setTimeout(() => {
+          navigation.navigate('Login');
+        }, 2000);
+      }
+      
+      Alert.alert('Analysis Failed', errorMessage);
     } finally {
       setIsProcessing(false);
       setUploadProgress(0);
     }
+  };
+
+  // Render model status indicator
+  const renderModelStatus = () => {
+    let statusColor, statusText, statusIcon;
+    
+    switch (modelStatus) {
+      case 'ready':
+        statusColor = '#10b981';
+        statusText = 'AI Model Ready';
+        statusIcon = 'check-circle';
+        break;
+      case 'error':
+        statusColor = '#ef4444';
+        statusText = 'AI Model Error';
+        statusIcon = 'alert-circle';
+        break;
+      default:
+        statusColor = '#f59e0b';
+        statusText = 'Checking AI Model...';
+        statusIcon = 'clock';
+    }
+
+    return (
+      <Card style={[styles.statusCard, { borderLeftColor: statusColor }]} elevation={1}>
+        <Card.Content>
+          <View style={styles.statusContent}>
+            <IconButton icon={statusIcon} iconColor={statusColor} size={20} />
+            <Text style={[styles.statusText, { color: statusColor }]}>
+              {statusText}
+            </Text>
+          </View>
+          {modelStatus === 'ready' && (
+            <Text style={styles.statusSubtext}>
+              Detects: Normal, Diabetic Retinopathy, Glaucoma, Cataract
+            </Text>
+          )}
+        </Card.Content>
+      </Card>
+    );
+  };
+
+  // Render user welcome card
+  const renderUserWelcome = () => {
+    if (isLoadingUser) {
+      return (
+        <Card style={styles.userCard} elevation={1}>
+          <Card.Content>
+            <View style={styles.userContent}>
+              <IconButton icon="account-circle" iconColor="#3b82f6" size={24} />
+              <Text style={styles.userText}>Loading user info...</Text>
+            </View>
+          </Card.Content>
+        </Card>
+      );
+    }
+
+    if (userInfo) {
+      return (
+        <Card style={styles.userCard} elevation={1}>
+          <Card.Content>
+            <View style={styles.userContent}>
+              <IconButton icon="account-circle" iconColor="#3b82f6" size={24} />
+              <View style={styles.userTextContainer}>
+                <Text style={styles.userWelcome}>
+                  Welcome, {userInfo.username}! 👋
+                </Text>
+                <Text style={styles.userSubtext}>
+                  {userInfo.email} • Age: {userInfo.age || 'Not set'} • Gender: {userInfo.gender || 'Not set'}
+                </Text>
+              </View>
+            </View>
+          </Card.Content>
+        </Card>
+      );
+    }
+
+    return null;
   };
 
   // Render image upload card
@@ -219,13 +474,19 @@ export default function Eye_Scan({ navigation }) {
             <TouchableOpacity
               style={styles.uploadPlaceholder}
               onPress={() => showImagePicker(eyeType)}
+              disabled={modelStatus !== 'ready'}
             >
               <IconButton
                 icon="camera-plus"
                 size={40}
-                iconColor="#3b82f6"
+                iconColor={modelStatus === 'ready' ? "#3b82f6" : "#9ca3af"}
               />
-              <Text style={styles.uploadText}>Tap to upload {title.toLowerCase()}</Text>
+              <Text style={[
+                styles.uploadText, 
+                { color: modelStatus === 'ready' ? "#3b82f6" : "#9ca3af" }
+              ]}>
+                Tap to capture {title.toLowerCase()}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -236,6 +497,7 @@ export default function Eye_Scan({ navigation }) {
             onPress={() => showImagePicker(eyeType)}
             style={styles.changeImageButton}
             icon="image-edit"
+            disabled={modelStatus !== 'ready'}
           >
             Change Image
           </Button>
@@ -272,8 +534,10 @@ export default function Eye_Scan({ navigation }) {
                   </View>
                 </View>
               </View>
-              <Text style={styles.headerTitle}>Eye Scan</Text>
-              <Text style={styles.headerSubtitle}>Upload images for analysis</Text>
+              <Text style={styles.headerTitle}>AI Eye Analysis</Text>
+              <Text style={styles.headerSubtitle}>
+                4-condition detection system
+              </Text>
             </View>
           </View>
         </LinearGradient>
@@ -284,17 +548,25 @@ export default function Eye_Scan({ navigation }) {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* User Welcome */}
+          {renderUserWelcome()}
+
+          {/* Model Status */}
+          {renderModelStatus()}
+
           {/* Instructions */}
           <Card style={styles.instructionCard} elevation={1}>
             <Card.Content>
               <Text variant="titleMedium" style={styles.instructionTitle}>
-                📋 Instructions
+                🔬 AI Analysis Information
               </Text>
               <Text style={styles.instructionText}>
-                • Take clear, well-lit photos of both eyes{'\n'}
-                • Ensure the eye is centered and in focus{'\n'}
-                • Remove contact lenses if possible{'\n'}
-                • Use natural lighting for best results
+                • Our AI model analyzes for 4 conditions{'\n'}
+                • Normal eye, Diabetic Retinopathy, Glaucoma, Cataract{'\n'}
+                • Take clear, well-lit photos centered on the eye{'\n'}
+                • Remove contact lenses for best results{'\n'}
+                • Results based on medical research studies{'\n'}
+                • For screening only - not a medical diagnosis
               </Text>
             </Card.Content>
           </Card>
@@ -312,7 +584,6 @@ export default function Eye_Scan({ navigation }) {
                 Patient Information
               </Text>
 
-              {/* Age Input */}
               <TextInput
                 label="Age"
                 value={age}
@@ -320,72 +591,55 @@ export default function Eye_Scan({ navigation }) {
                 keyboardType="numeric"
                 style={styles.input}
                 mode="outlined"
-                placeholder="Enter your age"
+                placeholder={userInfo?.age ? `From profile: ${userInfo.age}` : "Enter age (1-120)"}
+                disabled={modelStatus !== 'ready'}
               />
 
-              {/* Gender Selection */}
               <Text style={styles.genderLabel}>Gender</Text>
               <View style={styles.genderContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.genderOption,
-                    gender === 'male' && styles.genderSelected
-                  ]}
-                  onPress={() => setGender('male')}
-                >
-                  <RadioButton
-                    value="male"
-                    status={gender === 'male' ? 'checked' : 'unchecked'}
-                    onPress={() => setGender('male')}
-                  />
-                  <Text style={styles.genderText}>Male</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.genderOption,
-                    gender === 'female' && styles.genderSelected
-                  ]}
-                  onPress={() => setGender('female')}
-                >
-                  <RadioButton
-                    value="female"
-                    status={gender === 'female' ? 'checked' : 'unchecked'}
-                    onPress={() => setGender('female')}
-                  />
-                  <Text style={styles.genderText}>Female</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.genderOption,
-                    gender === 'other' && styles.genderSelected
-                  ]}
-                  onPress={() => setGender('other')}
-                >
-                  <RadioButton
-                    value="other"
-                    status={gender === 'other' ? 'checked' : 'unchecked'}
-                    onPress={() => setGender('other')}
-                  />
-                  <Text style={styles.genderText}>Other</Text>
-                </TouchableOpacity>
+                {['male', 'female', 'other'].map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[
+                      styles.genderOption,
+                      gender === option && styles.genderSelected
+                    ]}
+                    onPress={() => setGender(option)}
+                    disabled={modelStatus !== 'ready'}
+                  >
+                    <RadioButton
+                      value={option}
+                      status={gender === option ? 'checked' : 'unchecked'}
+                      onPress={() => setGender(option)}
+                      disabled={modelStatus !== 'ready'}
+                    />
+                    <Text style={styles.genderText}>
+                      {option.charAt(0).toUpperCase() + option.slice(1)}
+                      {userInfo?.gender?.toLowerCase() === option && ' (From Profile)'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </Card.Content>
           </Card>
 
-          {/* Progress Bar */}
+          {/* Progress */}
           {isProcessing && (
             <Card style={styles.progressCard} elevation={1}>
               <Card.Content>
                 <Text style={styles.progressText}>
-                  Processing scan... {uploadProgress}%
+                  AI Analysis in Progress... {uploadProgress}%
                 </Text>
                 <ProgressBar
                   progress={uploadProgress / 100}
                   color="#3b82f6"
                   style={styles.progressBar}
                 />
+                <Text style={styles.progressSubtext}>
+                  {uploadProgress < 40 ? 'Preparing images...' : 
+                   uploadProgress < 80 ? 'Running AI analysis...' : 
+                   'Generating results...'}
+                </Text>
               </Card.Content>
             </Card>
           )}
@@ -396,13 +650,18 @@ export default function Eye_Scan({ navigation }) {
           <Button
             mode="contained"
             onPress={handleSubmitScan}
-            style={styles.submitButton}
+            style={[
+              styles.submitButton,
+              { opacity: modelStatus === 'ready' ? 1 : 0.5 }
+            ]}
             contentStyle={styles.submitContent}
-            disabled={isProcessing}
+            disabled={isProcessing || modelStatus !== 'ready'}
             loading={isProcessing}
-            icon="eye-check"
+            icon="brain"
           >
-            {isProcessing ? 'Processing...' : 'Analyze Eyes'}
+            {isProcessing ? 'Analyzing...' : 
+             modelStatus !== 'ready' ? 'AI Model Loading...' : 
+             'Start AI Analysis'}
           </Button>
         </Surface>
       </SafeAreaView>
@@ -411,6 +670,60 @@ export default function Eye_Scan({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // All existing styles remain the same...
+  statusCard: {
+    marginBottom: 15,
+    backgroundColor: '#ffffff',
+    borderLeftWidth: 4,
+  },
+  statusContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusText: {
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginLeft: 5,
+  },
+  statusSubtext: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 5,
+    marginLeft: 35,
+  },
+  
+  // New user welcome card styles
+  userCard: {
+    marginBottom: 15,
+    backgroundColor: '#ffffff',
+    borderLeftWidth: 4,
+    borderLeftColor: '#3b82f6',
+  },
+  userContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userTextContainer: {
+    marginLeft: 5,
+    flex: 1,
+  },
+  userWelcome: {
+    fontWeight: 'bold',
+    fontSize: 16,
+    color: '#1e40af',
+  },
+  userText: {
+    fontSize: 14,
+    color: '#64748b',
+    marginLeft: 10,
+  },
+  userSubtext: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  
+  // Continue with all your existing styles...
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
@@ -540,7 +853,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   uploadText: {
-    color: '#3b82f6',
     fontSize: 14,
     marginTop: 10,
   },
@@ -591,6 +903,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     color: '#3b82f6',
     fontWeight: 'bold',
+  },
+  progressSubtext: {
+    textAlign: 'center',
+    marginTop: 5,
+    color: '#64748b',
+    fontSize: 12,
   },
   progressBar: {
     height: 8,

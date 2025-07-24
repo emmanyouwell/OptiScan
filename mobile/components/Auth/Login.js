@@ -21,6 +21,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import baseURL from '../../assets/common/baseURL';
 
 const { width, height } = Dimensions.get('window');
@@ -109,10 +110,25 @@ export default function Login({ navigation }) {
       console.log('✅ Login response:', response.data);
 
       if (response.data.access_token) {
-        // Store token if needed (you might want to use AsyncStorage)
-        // await AsyncStorage.setItem('access_token', response.data.access_token);
+        // Store auth token
+        await AsyncStorage.setItem('authToken', response.data.access_token);
         
-        showSnackbar('Login successful!');
+        // Store complete login response for user info
+        await AsyncStorage.setItem('loginResponse', JSON.stringify(response.data));
+        
+        // Also store user info separately for easy access
+        if (response.data.user) {
+          await AsyncStorage.setItem('userInfo', JSON.stringify(response.data.user));
+          
+          console.log('✅ Stored user info:', {
+            username: response.data.user.username,
+            email: response.data.user.email,
+            age: response.data.user.age,
+            gender: response.data.user.gender
+          });
+        }
+        
+        showSnackbar(`Welcome back, ${response.data.user?.username || 'User'}!`);
         
         // Clear form
         setFormData({

@@ -767,9 +767,9 @@ Confidential Medical Report • ${timestamp}
       <div className="header-section">
         <div className="title-area">
           <h1>Eye Analysis</h1>
-          <p>Professional eye tracking assessment</p>
+          <p>OptiScan</p>
           {authToken && (
-            <span className="auth-status">🔒 Authenticated Session</span>
+            <span className="auth-status"></span>
           )}
         </div>
         
