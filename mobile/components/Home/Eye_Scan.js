@@ -255,120 +255,139 @@ export default function Eye_Scan({ navigation }) {
   };
 
   // Submit scan for AI analysis
-  const handleSubmitScan = async () => {
-    const errors = validateForm();
+  // Update the handleSubmitScan function in your Eye_Scan.js file
+// Replace the existing handleSubmitScan function with this updated version:
+
+const handleSubmitScan = async () => {
+  const errors = validateForm();
+  
+  if (errors.length > 0) {
+    Alert.alert('Validation Error', errors.join('\n'));
+    return;
+  }
+
+  setIsProcessing(true);
+  setUploadProgress(0);
+
+  try {
+    // Get auth token from AsyncStorage
+    setUploadProgress(10);
+    const authToken = await getAuthToken();
+    console.log('🔐 Using auth token for API request');
+
+    // Convert images to base64
+    setUploadProgress(30);
+    console.log('🖼️ Converting left eye image to base64...');
+    const leftEyeBase64 = await convertToBase64(leftEyeImage);
     
-    if (errors.length > 0) {
-      Alert.alert('Validation Error', errors.join('\n'));
-      return;
-    }
+    setUploadProgress(50);
+    console.log('🖼️ Converting right eye image to base64...');
+    const rightEyeBase64 = await convertToBase64(rightEyeImage);
 
-    setIsProcessing(true);
-    setUploadProgress(0);
+    // Prepare request with user data from AsyncStorage
+    setUploadProgress(70);
+    const requestData = {
+      left_eye_image: leftEyeBase64,
+      right_eye_image: rightEyeBase64,
+      age: parseInt(age),
+      gender: gender
+    };
 
-    try {
-      // Get auth token from AsyncStorage
-      setUploadProgress(10);
-      const authToken = await getAuthToken();
-      console.log('🔐 Using auth token for API request');
+    console.log('📤 Sending analysis request with data:', {
+      age: requestData.age,
+      gender: requestData.gender,
+      hasLeftImage: !!requestData.left_eye_image,
+      hasRightImage: !!requestData.right_eye_image
+    });
 
-      // Convert images to base64
-      setUploadProgress(30);
-      console.log('🖼️ Converting left eye image to base64...');
-      const leftEyeBase64 = await convertToBase64(leftEyeImage);
-      
-      setUploadProgress(50);
-      console.log('🖼️ Converting right eye image to base64...');
-      const rightEyeBase64 = await convertToBase64(rightEyeImage);
+    // Send to AI backend using axios
+    setUploadProgress(85);
+    const response = await axios.post(
+      `${baseURL}/api/eye-scan/analyze`,
+      requestData,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+      }
+    );
 
-      // Prepare request with user data from AsyncStorage
-      setUploadProgress(70);
-      const requestData = {
-        left_eye_image: leftEyeBase64,
-        right_eye_image: rightEyeBase64,
-        age: parseInt(age), // Age from AsyncStorage or user input
-        gender: gender      // Gender from AsyncStorage or user selection
-      };
+    setUploadProgress(100);
+    const analysisResults = response.data;
+    console.log('✅ Analysis completed successfully:', analysisResults);
 
-      console.log('📤 Sending analysis request with data:', {
-        age: requestData.age,
-        gender: requestData.gender,
-        hasLeftImage: !!requestData.left_eye_image,
-        hasRightImage: !!requestData.right_eye_image
-      });
-
-      // Send to AI backend using axios
-      setUploadProgress(85);
-      const response = await axios.post(
-        `${baseURL}/api/eye-scan/analyze`,
-        requestData,
+    // Show success and navigate with properly structured data
+    const userName = userInfo?.username || 'User';
+    Alert.alert(
+      'Analysis Complete',
+      `Hello ${userName}! 👋\n\nAI has analyzed your eye images for:\n• Diabetic Retinopathy\n• Glaucoma\n• Cataract\n• Normal Condition\n\nResults are ready for review.`,
+      [
         {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`,
-          },
-        }
-      );
-
-      setUploadProgress(100);
-      const analysisResults = response.data;
-      console.log('✅ Analysis completed successfully');
-
-      // Show success and navigate with user info
-      const userName = userInfo?.username || 'User';
-      Alert.alert(
-        'Analysis Complete',
-        `Hello ${userName}! 👋\n\nAI has analyzed your eye images for:\n• Diabetic Retinopathy\n• Glaucoma\n• Cataract\n• Normal Condition\n\nResults are ready for review.`,
-        [
-          {
-            text: 'View Results',
-            onPress: () => {
-              navigation.navigate('EyeScanResults', {
-                scanData: {
-                  scanId: analysisResults.scan_id,
-                  leftEye: leftEyeImage,
-                  rightEye: rightEyeImage,
-                  age: parseInt(age),
-                  gender: gender,
-                  results: analysisResults,
-                  userInfo: userInfo, // Pass complete user info
-                  username: userName,
-                  timestamp: new Date().toISOString()
+          text: 'View Results',
+          onPress: () => {
+            // Navigate with data structured for EyeScanResults.js
+            navigation.navigate('EyeScanResults', {
+              scanData: {
+                scanId: analysisResults.scan_id,
+                leftEye: leftEyeImage,
+                rightEye: rightEyeImage,
+                age: parseInt(age),
+                gender: gender,
+                timestamp: analysisResults.timestamp || new Date().toISOString(),
+                userInfo: {
+                  username: analysisResults.user_info?.username || userInfo?.username || 'Anonymous',
+                  email: analysisResults.user_info?.email || userInfo?.email || '',
+                  age: analysisResults.user_info?.age || userInfo?.age || parseInt(age),
+                  gender: analysisResults.user_info?.gender || userInfo?.gender || gender
+                },
+                results: {
+                  left_eye: analysisResults.left_eye || {},
+                  right_eye: analysisResults.right_eye || {},
+                  combined: analysisResults.combined || {},
+                  final_prediction: {
+                    condition: analysisResults.final_prediction?.condition || 'unknown',
+                    confidence: analysisResults.final_prediction?.confidence || 0,
+                    risk_level: analysisResults.final_prediction?.risk_level || 'low'
+                  },
+                  recommendations: analysisResults.recommendations || ['Please consult with an eye care professional for further evaluation.'],
+                  overall_assessment: analysisResults.overall_assessment || 'Analysis completed'
                 }
-              });
-            }
+              }
+            });
           }
-        ]
-      );
-
-    } catch (error) {
-      console.error('❌ AI analysis failed:', error);
-      
-      let errorMessage = 'Failed to analyze images. Please try again.';
-      
-      if (error.response) {
-        if (error.response.status === 401) {
-          errorMessage = 'Authentication failed. Please login again.';
-          // Navigate to login if auth fails
-          setTimeout(() => {
-            navigation.navigate('Login');
-          }, 2000);
-        } else if (error.response.data?.detail) {
-          errorMessage = error.response.data.detail;
         }
-      } else if (error.message.includes('Authentication required')) {
-        errorMessage = 'Please login to continue with the analysis.';
+      ]
+    );
+
+  } catch (error) {
+    console.error('❌ AI analysis failed:', error);
+    
+    let errorMessage = 'Failed to analyze images. Please try again.';
+    
+    if (error.response) {
+      if (error.response.status === 401) {
+        errorMessage = 'Authentication failed. Please login again.';
+        // Navigate to login if auth fails
         setTimeout(() => {
           navigation.navigate('Login');
         }, 2000);
+      } else if (error.response.data?.detail) {
+        errorMessage = error.response.data.detail;
       }
-      
-      Alert.alert('Analysis Failed', errorMessage);
-    } finally {
-      setIsProcessing(false);
-      setUploadProgress(0);
+    } else if (error.message.includes('Authentication required')) {
+      errorMessage = 'Please login to continue with the analysis.';
+      setTimeout(() => {
+        navigation.navigate('Login');
+      }, 2000);
     }
-  };
+    
+    Alert.alert('Analysis Failed', errorMessage);
+  } finally {
+    setIsProcessing(false);
+    setUploadProgress(0);
+  }
+};
 
   // Render model status indicator
   const renderModelStatus = () => {

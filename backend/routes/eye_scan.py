@@ -124,8 +124,8 @@ async def get_latest_scan(
     except Exception as e:
         logging.error(f"❌ Failed to fetch latest scan: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch latest scan: {str(e)}")
-
-@router.post("/analyze", response_model=EyeScanResponse)
+    
+@router.post("/analyze")
 async def analyze_eye_scan(
     request: EyeScanRequest,
     current_user: dict = Depends(get_current_user)
@@ -149,6 +149,59 @@ async def analyze_eye_scan(
             right_eye_image=request.right_eye_image
         )
         
+        # Helper function to normalize probability scores
+        def normalize_probabilities(scores_dict):
+            """Normalize probability scores to ensure they're between 0-1 and sum to 1"""
+            if not scores_dict:
+                return {}
+            
+            # Convert all values to float and ensure they're positive
+            normalized = {}
+            for key, value in scores_dict.items():
+                try:
+                    # Handle different input formats
+                    if isinstance(value, (int, float)):
+                        normalized[key] = max(0.0, float(value))
+                    else:
+                        normalized[key] = 0.0
+                except (ValueError, TypeError):
+                    normalized[key] = 0.0
+            
+            # If values are already in 0-1 range, keep them as is
+            max_value = max(normalized.values()) if normalized.values() else 1.0
+            if max_value <= 1.0:
+                return normalized
+            
+            # If values are percentages (0-100), divide by 100
+            if max_value <= 100.0:
+                return {k: v / 100.0 for k, v in normalized.items()}
+            
+            # If values are raw scores, normalize using softmax-like approach
+            # First, apply softmax to convert to probabilities
+            import math
+            exp_values = {}
+            for key, value in normalized.items():
+                try:
+                    # Prevent overflow by capping large values
+                    capped_value = min(value, 700)  # exp(700) is close to max float
+                    exp_values[key] = math.exp(capped_value / max_value * 10)  # Scale down for stability
+                except (OverflowError, ValueError):
+                    exp_values[key] = 1.0
+            
+            # Normalize to sum to 1
+            total = sum(exp_values.values())
+            if total > 0:
+                return {k: v / total for k, v in exp_values.items()}
+            else:
+                # Fallback: equal probabilities
+                num_classes = len(normalized)
+                return {k: 1.0 / num_classes for k in normalized.keys()}
+        
+        # Initialize analysis results
+        left_eye_scores = {}
+        right_eye_scores = {}
+        combined_scores = {}
+        
         # Process left eye
         try:
             left_result = ai_processor.classify_eye_condition(
@@ -156,6 +209,29 @@ async def analyze_eye_scan(
                 patient_age=request.age
             )
             scan_data.left_eye_analysis = left_result
+            
+            # Extract and normalize probability scores
+            if hasattr(left_result, 'probability_scores') and left_result.probability_scores:
+                left_eye_scores = normalize_probabilities(left_result.probability_scores)
+            elif hasattr(left_result, 'confidence') and hasattr(left_result, 'condition'):
+                # Single prediction format - create probability distribution
+                confidence = float(left_result.confidence)
+                if confidence > 1.0:  # If confidence is in percentage format
+                    confidence = confidence / 100.0
+                confidence = min(max(confidence, 0.0), 1.0)  # Clamp to 0-1
+                
+                # Create probability distribution
+                left_eye_scores = {
+                    str(left_result.condition.value): confidence,
+                    # Distribute remaining probability among other classes
+                }
+                # Add other common conditions with remaining probability
+                remaining_prob = (1.0 - confidence) / 3  # Assuming 4 classes total
+                common_conditions = ['normal', 'diabetic_retinopathy', 'glaucoma', 'cataract']
+                for condition in common_conditions:
+                    if condition not in left_eye_scores:
+                        left_eye_scores[condition] = remaining_prob
+            
             logging.info(f"✅ Left eye analyzed: {left_result.condition.value}")
         except Exception as e:
             logging.error(f"❌ Left eye analysis failed: {e}")
@@ -168,6 +244,28 @@ async def analyze_eye_scan(
                 patient_age=request.age
             )
             scan_data.right_eye_analysis = right_result
+            
+            # Extract and normalize probability scores
+            if hasattr(right_result, 'probability_scores') and right_result.probability_scores:
+                right_eye_scores = normalize_probabilities(right_result.probability_scores)
+            elif hasattr(right_result, 'confidence') and hasattr(right_result, 'condition'):
+                # Single prediction format - create probability distribution
+                confidence = float(right_result.confidence)
+                if confidence > 1.0:  # If confidence is in percentage format
+                    confidence = confidence / 100.0
+                confidence = min(max(confidence, 0.0), 1.0)  # Clamp to 0-1
+                
+                # Create probability distribution
+                right_eye_scores = {
+                    str(right_result.condition.value): confidence,
+                }
+                # Add other common conditions with remaining probability
+                remaining_prob = (1.0 - confidence) / 3  # Assuming 4 classes total
+                common_conditions = ['normal', 'diabetic_retinopathy', 'glaucoma', 'cataract']
+                for condition in common_conditions:
+                    if condition not in right_eye_scores:
+                        right_eye_scores[condition] = remaining_prob
+            
             logging.info(f"✅ Right eye analyzed: {right_result.condition.value}")
         except Exception as e:
             logging.error(f"❌ Right eye analysis failed: {e}")
@@ -176,36 +274,116 @@ async def analyze_eye_scan(
             else:
                 scan_data.processing_error = f"Right eye: {str(e)}"
         
+        # Calculate combined scores (average of both eyes)
+        if left_eye_scores or right_eye_scores:
+            all_conditions = set(left_eye_scores.keys()) | set(right_eye_scores.keys())
+            for condition in all_conditions:
+                left_score = left_eye_scores.get(condition, 0.0)
+                right_score = right_eye_scores.get(condition, 0.0)
+                combined_scores[condition] = (left_score + right_score) / 2.0
+            
+            # Ensure combined scores are also normalized
+            combined_scores = normalize_probabilities(combined_scores)
+        
+        # Determine final prediction from combined scores
+        final_condition = 'normal'
+        final_confidence = 0.0
+        final_risk_level = 'low'
+        
+        if combined_scores:
+            # Get the condition with highest combined score
+            sorted_conditions = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)
+            final_condition = sorted_conditions[0][0]
+            final_confidence = sorted_conditions[0][1] * 100.0  # Convert to percentage for display
+            
+            # Determine risk level based on confidence
+            if final_confidence >= 80.0:
+                final_risk_level = 'high'
+            elif final_confidence >= 60.0:
+                final_risk_level = 'medium'
+            else:
+                final_risk_level = 'low'
+        
         # Calculate overall assessment
         if scan_data.left_eye_analysis or scan_data.right_eye_analysis:
             scan_data.calculate_overall_assessment()
             scan_data.is_processed = True
         
-        # Save to database
+        # Generate recommendations
+        recommendations = []
+        try:
+            if scan_data.left_eye_analysis and hasattr(scan_data.left_eye_analysis, 'get_medical_recommendation'):
+                recommendations.append(scan_data.left_eye_analysis.get_medical_recommendation())
+        except:
+            pass
+        
+        try:
+            if scan_data.right_eye_analysis and hasattr(scan_data.right_eye_analysis, 'get_medical_recommendation'):
+                recommendations.append(scan_data.right_eye_analysis.get_medical_recommendation())
+        except:
+            pass
+        
+        # Remove duplicates and filter empty recommendations
+        recommendations = list(filter(None, set(recommendations)))
+        
+        # Default recommendations if no specific ones
+        if not recommendations:
+            if final_condition == 'normal':
+                recommendations = ["No abnormalities detected. Continue regular eye examinations annually."]
+            elif final_condition == 'diabetic_retinopathy':
+                recommendations = ["Possible diabetic retinopathy detected. Please consult an ophthalmologist immediately for comprehensive evaluation."]
+            elif final_condition == 'glaucoma':
+                recommendations = ["Possible glaucoma signs detected. Please schedule an appointment with an eye specialist for pressure testing and detailed examination."]
+            elif final_condition == 'cataract':
+                recommendations = ["Possible cataract detected. Please consult an ophthalmologist to discuss treatment options."]
+            else:
+                recommendations = ["Please consult with an eye care professional for further evaluation."]
+        
+        # Save to database with additional fields for frontend compatibility
         scan_dict = scan_data.dict()
         scan_dict["_id"] = scan_data.scan_id
+        
+        # Add normalized probability scores to the scan data
+        scan_dict["left_eye_probability_scores"] = left_eye_scores
+        scan_dict["right_eye_probability_scores"] = right_eye_scores
+        scan_dict["combined_probability_scores"] = combined_scores
+        scan_dict["final_prediction"] = {
+            "condition": final_condition,
+            "confidence": final_confidence,
+            "risk_level": final_risk_level
+        }
+        scan_dict["recommendations"] = recommendations
+        
         result = eye_scans_collection.insert_one(scan_dict)
         
         if not result.inserted_id:
             raise HTTPException(status_code=500, detail="Failed to save scan data")
         
-        # Generate recommendations
-        recommendations = []
-        if scan_data.left_eye_analysis:
-            recommendations.append(scan_data.left_eye_analysis.get_medical_recommendation())
-        if scan_data.right_eye_analysis:
-            recommendations.append(scan_data.right_eye_analysis.get_medical_recommendation())
+        logging.info(f"✅ Analysis completed - Final: {final_condition} ({final_confidence:.1f}%)")
         
-        return EyeScanResponse(
-            scan_id=scan_data.scan_id,
-            message="Eye scan analysis completed successfully",
-            left_eye_result=scan_data.left_eye_analysis,
-            right_eye_result=scan_data.right_eye_analysis,
-            overall_assessment=scan_data.overall_risk_level,
-            recommendations=list(set(recommendations)),  # Remove duplicates
-            study_references=scan_data.study_references,
-            timestamp=scan_data.timestamp
-        )
+        # Return response in format expected by frontend
+        return {
+            "scan_id": str(scan_data.scan_id),
+            "message": "Eye scan analysis completed successfully",
+            "left_eye": left_eye_scores,
+            "right_eye": right_eye_scores,
+            "combined": combined_scores,
+            "final_prediction": {
+                "condition": final_condition,
+                "confidence": final_confidence,
+                "risk_level": final_risk_level
+            },
+            "recommendations": recommendations,
+            "study_references": scan_data.study_references if hasattr(scan_data, 'study_references') else [],
+            "overall_assessment": scan_data.overall_risk_level if hasattr(scan_data, 'overall_risk_level') else "Analysis completed",
+            "timestamp": scan_data.timestamp.isoformat(),
+            "user_info": {
+                "username": current_user.get("username"),
+                "email": current_user.get("email"),
+                "age": current_user.get("age"),
+                "gender": current_user.get("gender")
+            }
+        }
         
     except Exception as e:
         logging.error(f"❌ Eye scan analysis failed: {e}")

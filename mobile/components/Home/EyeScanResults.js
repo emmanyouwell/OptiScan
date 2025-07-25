@@ -7,8 +7,6 @@ import {
   Image,
   Alert,
   Dimensions,
-  Share,
-  Platform,
 } from 'react-native';
 import {
   Text,
@@ -190,32 +188,75 @@ export default function EyeScanResults({ navigation, route }) {
   const formatScanData = (scan, user_info) => {
     console.log('🔄 Formatting scan data:', { scan, user_info });
     
-    // Extract analysis results from the scan data
+    // Handle data coming directly from Eye_Scan.js navigation
+    if (scan.results) {
+      console.log('📱 Using direct navigation data from Eye_Scan.js');
+      return scan; // Data is already formatted
+    }
+    
+    // Handle data from API endpoints (existing logic)
     const leftEyeAnalysis = scan.left_eye_analysis || {};
     const rightEyeAnalysis = scan.right_eye_analysis || {};
     
-    // Get probability scores (this should match your backend model output)
-    const leftEyeScores = leftEyeAnalysis.probability_scores || {};
-    const rightEyeScores = rightEyeAnalysis.probability_scores || {};
+    // Try to get probability scores from multiple possible locations
+    let leftEyeScores = {};
+    let rightEyeScores = {};
+    let combinedScores = {};
     
-    // Calculate combined scores (average of both eyes)
-    const combinedScores = {};
-    const allConditions = new Set([...Object.keys(leftEyeScores), ...Object.keys(rightEyeScores)]);
+    // Check for probability scores in different formats
+    if (scan.left_eye_probability_scores) {
+      leftEyeScores = scan.left_eye_probability_scores;
+    } else if (leftEyeAnalysis.probability_scores) {
+      leftEyeScores = leftEyeAnalysis.probability_scores;
+    } else if (leftEyeAnalysis.condition && leftEyeAnalysis.confidence) {
+      // Single prediction format
+      leftEyeScores = {
+        [leftEyeAnalysis.condition]: leftEyeAnalysis.confidence / 100
+      };
+    }
     
-    allConditions.forEach(condition => {
-      const leftScore = leftEyeScores[condition] || 0;
-      const rightScore = rightEyeScores[condition] || 0;
-      combinedScores[condition] = (leftScore + rightScore) / 2;
-    });
+    if (scan.right_eye_probability_scores) {
+      rightEyeScores = scan.right_eye_probability_scores;
+    } else if (rightEyeAnalysis.probability_scores) {
+      rightEyeScores = rightEyeAnalysis.probability_scores;
+    } else if (rightEyeAnalysis.condition && rightEyeAnalysis.confidence) {
+      // Single prediction format
+      rightEyeScores = {
+        [rightEyeAnalysis.condition]: rightEyeAnalysis.confidence / 100
+      };
+    }
+    
+    // Get combined scores
+    if (scan.combined_probability_scores) {
+      combinedScores = scan.combined_probability_scores;
+    } else {
+      // Calculate combined scores (average of both eyes)
+      const allConditions = new Set([...Object.keys(leftEyeScores), ...Object.keys(rightEyeScores)]);
+      allConditions.forEach(condition => {
+        const leftScore = leftEyeScores[condition] || 0;
+        const rightScore = rightEyeScores[condition] || 0;
+        combinedScores[condition] = (leftScore + rightScore) / 2;
+      });
+    }
     
     // Determine final prediction
     let finalCondition = 'normal';
     let finalConfidence = 0;
+    let finalRiskLevel = 'low';
     
-    if (Object.keys(combinedScores).length > 0) {
-      const sortedScores = Object.entries(combinedScores).sort((a, b) => b[1] - a[1]);
-      finalCondition = sortedScores[0][0];
-      finalConfidence = sortedScores[0][1] * 100;
+    // Check if we have a final_prediction object from the backend
+    if (scan.final_prediction) {
+      finalCondition = scan.final_prediction.condition || 'normal';
+      finalConfidence = scan.final_prediction.confidence || 0;
+      finalRiskLevel = scan.final_prediction.risk_level || 'low';
+    } else {
+      // Calculate from combined scores
+      if (Object.keys(combinedScores).length > 0) {
+        const sortedScores = Object.entries(combinedScores).sort((a, b) => b[1] - a[1]);
+        finalCondition = sortedScores[0][0];
+        finalConfidence = sortedScores[0][1] * 100;
+        finalRiskLevel = getRiskLevel(finalConfidence);
+      }
     }
     
     // Use the highest confidence condition from either eye if combined is not available
@@ -223,9 +264,26 @@ export default function EyeScanResults({ navigation, route }) {
       if (leftEyeAnalysis.confidence && leftEyeAnalysis.condition) {
         finalCondition = leftEyeAnalysis.condition;
         finalConfidence = leftEyeAnalysis.confidence;
+        finalRiskLevel = getRiskLevel(finalConfidence);
       } else if (rightEyeAnalysis.confidence && rightEyeAnalysis.condition) {
         finalCondition = rightEyeAnalysis.condition;
         finalConfidence = rightEyeAnalysis.confidence;
+        finalRiskLevel = getRiskLevel(finalConfidence);
+      }
+    }
+    
+    // Get recommendations
+    let recommendations = [];
+    if (scan.recommendations && Array.isArray(scan.recommendations)) {
+      recommendations = scan.recommendations;
+    } else if (scan.study_references && Array.isArray(scan.study_references)) {
+      recommendations = scan.study_references;
+    } else {
+      // Default recommendations based on condition
+      if (finalCondition === 'normal') {
+        recommendations = ['No abnormalities detected. Continue regular eye examinations annually.'];
+      } else {
+        recommendations = ['Please consult with an eye care professional for further evaluation.'];
       }
     }
     
@@ -249,9 +307,9 @@ export default function EyeScanResults({ navigation, route }) {
         final_prediction: {
           condition: finalCondition,
           confidence: finalConfidence,
-          risk_level: scan.overall_risk_level || getRiskLevel(finalConfidence)
+          risk_level: finalRiskLevel
         },
-        recommendations: scan.study_references || scan.recommendations || [],
+        recommendations: recommendations,
         overall_assessment: scan.overall_assessment || scan.clinical_summary || 'Analysis completed'
       }
     };
@@ -265,6 +323,12 @@ export default function EyeScanResults({ navigation, route }) {
     if (confidence >= 80) return 'high';
     if (confidence >= 60) return 'medium';
     return 'low';
+  };
+
+  // Format percentage function
+  const formatPercentage = (value) => {
+    if (value == null || isNaN(value)) return '0.00';
+    return parseFloat(value).toFixed(2);
   };
 
   // Format condition name
@@ -436,40 +500,40 @@ export default function EyeScanResults({ navigation, route }) {
         </div>
 
         <div class="section">
-            <div class="section-title">AI Analysis Results</div>
-            <div class="result-main">
-                <div class="condition-name">${formatConditionName(finalPrediction.condition)}</div>
-                <div class="confidence">Confidence: ${finalPrediction.confidence?.toFixed(1) || 0}%</div>
-                <div class="risk-level">Risk Level: ${finalPrediction.risk_level?.toUpperCase() || 'LOW'}</div>
-            </div>
-        </div>
+          <div class="section-title">AI Analysis Results</div>
+          <div class="result-main">
+              <div class="condition-name">${formatConditionName(finalPrediction.condition)}</div>
+              <div class="confidence">Confidence: ${formatPercentage(finalPrediction.confidence)}%</div>
+              <div class="risk-level">Risk Level: ${finalPrediction.risk_level?.toUpperCase() || 'LOW'}</div>
+          </div>
+      </div>
 
-        <div class="section">
-            <div class="section-title">Left Eye Analysis</div>
-            ${Object.entries(leftEyeResults).map(([condition, probability]) => `
-                <div class="analysis-row">
-                    <span class="condition">${formatConditionName(condition)}</span>
-                    <span class="percentage">${(probability * 100).toFixed(1)}%</span>
-                </div>
-            `).join('')}
-        </div>
+          <div class="section">
+              <div class="section-title">Left Eye Analysis</div>
+              ${Object.entries(leftEyeResults).map(([condition, probability]) => `
+                  <div class="analysis-row">
+                      <span class="condition">${formatConditionName(condition)}</span>
+                      <span class="percentage">${formatPercentage(probability * 100)}%</span>
+                  </div>
+              `).join('')}
+          </div>
 
-        <div class="section">
-            <div class="section-title">Right Eye Analysis</div>
-            ${Object.entries(rightEyeResults).map(([condition, probability]) => `
-                <div class="analysis-row">
-                    <span class="condition">${formatConditionName(condition)}</span>
-                    <span class="percentage">${(probability * 100).toFixed(1)}%</span>
-                </div>
-            `).join('')}
-        </div>
+            <div class="section">
+              <div class="section-title">Right Eye Analysis</div>
+              ${Object.entries(rightEyeResults).map(([condition, probability]) => `
+                  <div class="analysis-row">
+                      <span class="condition">${formatConditionName(condition)}</span>
+                      <span class="percentage">${formatPercentage(probability * 100)}%</span>
+                  </div>
+              `).join('')}
+          </div>
 
-        <div class="section">
+            <div class="section">
             <div class="section-title">Combined Analysis</div>
             ${Object.entries(combinedResults).map(([condition, probability]) => `
                 <div class="analysis-row">
                     <span class="condition">${formatConditionName(condition)}</span>
-                    <span class="percentage">${(probability * 100).toFixed(1)}%</span>
+                    <span class="percentage">${formatPercentage(probability * 100)}%</span>
                 </div>
             `).join('')}
         </div>
@@ -551,70 +615,6 @@ export default function EyeScanResults({ navigation, route }) {
     }
   };
 
-  // Share as text (alternative option)
-  const shareAsText = async () => {
-    try {
-      const currentDate = new Date().toLocaleDateString();
-      const currentTime = new Date().toLocaleTimeString();
-      
-      const results = scanData.results;
-      const finalPrediction = results?.final_prediction || {};
-      
-      const textReport = `
-OptiScan AI Eye Analysis Report
-==============================
-
-Patient Information:
-- Name: ${scanData.userInfo?.username || 'Anonymous'}
-- Age: ${scanData.age} years
-- Gender: ${scanData.gender || 'Not specified'}
-- Email: ${scanData.userInfo?.email || 'Not provided'}
-- Scan Date: ${new Date(scanData.timestamp).toLocaleDateString()} at ${new Date(scanData.timestamp).toLocaleTimeString()}
-- Scan ID: ${scanData.scanId || 'N/A'}
-
-AI Analysis Results:
-- Primary Diagnosis: ${formatConditionName(finalPrediction.condition)}
-- Confidence: ${finalPrediction.confidence?.toFixed(1) || 0}%
-- Risk Level: ${finalPrediction.risk_level?.toUpperCase() || 'LOW'}
-
-Left Eye Results:
-${Object.entries(results?.left_eye || {}).map(([condition, probability]) => 
-  `- ${formatConditionName(condition)}: ${(probability * 100).toFixed(1)}%`
-).join('\n')}
-
-Right Eye Results:
-${Object.entries(results?.right_eye || {}).map(([condition, probability]) => 
-  `- ${formatConditionName(condition)}: ${(probability * 100).toFixed(1)}%`
-).join('\n')}
-
-Combined Analysis:
-${Object.entries(results?.combined || {}).map(([condition, probability]) => 
-  `- ${formatConditionName(condition)}: ${(probability * 100).toFixed(1)}%`
-).join('\n')}
-
-${results?.recommendations && results.recommendations.length > 0 ? `
-Recommendations:
-${results.recommendations.map(rec => `- ${rec}`).join('\n')}
-` : ''}
-
-Important Notice:
-This AI analysis is for screening purposes only. Please consult with a qualified eye care professional for proper diagnosis and treatment.
-
-Generated by OptiScan AI Eye Analysis System
-© ${new Date().getFullYear()} OptiScan. All rights reserved.
-      `.trim();
-
-      await Share.share({
-        message: textReport,
-        title: 'OptiScan Eye Analysis Report'
-      });
-
-    } catch (error) {
-      console.error('Text sharing failed:', error);
-      Alert.alert('Sharing Failed', 'Unable to share report as text.');
-    }
-  };
-
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -679,7 +679,7 @@ Generated by OptiScan AI Eye Analysis System
                   {formatConditionName(finalPrediction.condition)}
                 </Text>
                 <Text style={styles.confidenceText}>
-                  Confidence: {finalPrediction.confidence?.toFixed(1) || 0}%
+                  Confidence: {formatPercentage(finalPrediction.confidence)}%
                 </Text>
                 <Chip 
                   style={[styles.riskChip, { backgroundColor: getConditionColor(finalPrediction.condition) }]}
@@ -722,7 +722,7 @@ Generated by OptiScan AI Eye Analysis System
                 {Object.entries(results.left_eye).map(([condition, probability]) => (
                   <View key={condition} style={styles.resultRow}>
                     <Text style={styles.conditionText}>{formatConditionName(condition)}</Text>
-                    <Text style={styles.probabilityText}>{(probability * 100).toFixed(1)}%</Text>
+                    <Text style={styles.probabilityText}>{formatPercentage(probability * 100)}%</Text>
                   </View>
                 ))}
               </Card.Content>
@@ -737,7 +737,7 @@ Generated by OptiScan AI Eye Analysis System
                 {Object.entries(results.right_eye).map(([condition, probability]) => (
                   <View key={condition} style={styles.resultRow}>
                     <Text style={styles.conditionText}>{formatConditionName(condition)}</Text>
-                    <Text style={styles.probabilityText}>{(probability * 100).toFixed(1)}%</Text>
+                    <Text style={styles.probabilityText}>{formatPercentage(probability * 100)}%</Text>
                   </View>
                 ))}
               </Card.Content>
@@ -752,7 +752,7 @@ Generated by OptiScan AI Eye Analysis System
                 {Object.entries(results.combined).map(([condition, probability]) => (
                   <View key={condition} style={styles.resultRow}>
                     <Text style={styles.conditionText}>{formatConditionName(condition)}</Text>
-                    <Text style={styles.probabilityText}>{(probability * 100).toFixed(1)}%</Text>
+                    <Text style={styles.probabilityText}>{formatPercentage(probability * 100)}%</Text>
                   </View>
                 ))}
               </Card.Content>
@@ -797,25 +797,17 @@ Generated by OptiScan AI Eye Analysis System
           <View style={{ height: 120 }} />
         </ScrollView>
 
-        {/* Action Buttons */}
+        {/* Action Button */}
         <View style={styles.buttonContainer}>
           <Button
             mode="contained"
             onPress={generatePDF}
-            style={[styles.shareButton, { marginBottom: 10 }]}
+            style={styles.shareButton}
             loading={isGeneratingPDF}
             disabled={isGeneratingPDF}
             icon="file-pdf-box"
           >
             {isGeneratingPDF ? 'Generating PDF...' : 'Generate PDF Report'}
-          </Button>
-          <Button
-            mode="outlined"
-            onPress={shareAsText}
-            style={styles.shareButton}
-            icon="share"
-          >
-            Share as Text
           </Button>
         </View>
       </SafeAreaView>
