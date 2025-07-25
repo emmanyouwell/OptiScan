@@ -1,19 +1,20 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import UserNavBar from '../layouts/UserNavBar';
 import '../../CSS/ColorBlindTest.css'; // Import the CSS file
 
 const MAX_PLATES = 14;
 
 const ColorBlindTest = () => {
+  const navigate = useNavigate(); // Initialize navigate hook
   const [imageList, setImageList] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [predictedNumber, setPredictedNumber] = useState('');
   const [answers, setAnswers] = useState([]);
-  const [showAnalysis, setShowAnalysis] = useState(false);
-  const [analysis, setAnalysis] = useState(null);
   const [loadingPrediction, setLoadingPrediction] = useState(false);
+  const [savingResults, setSavingResults] = useState(false); // Add loading state for saving
 
   useEffect(() => {
     axios.get("http://localhost:8000/api/plates")
@@ -87,7 +88,7 @@ const ColorBlindTest = () => {
   };
 
   const analyzeAndSave = async () => {
-    setShowAnalysis(true);
+    setSavingResults(true); // Show loading state
 
     const typeCounts = { protanopia: 0, deuteranopia: 0, tritanopia: 0 };
     const allAnswers = [
@@ -135,10 +136,12 @@ const ColorBlindTest = () => {
     } catch (error) {
       console.error("Error parsing user data from localStorage:", error);
       alert("Error retrieving user data. Please login again.");
+      setSavingResults(false);
       return;
     }
     if (!userId) {
       alert("Error: User ID is invalid or missing. Please login again.");
+      setSavingResults(false);
       return;
     }
 
@@ -150,18 +153,14 @@ const ColorBlindTest = () => {
       device_info: { os: window.navigator.platform }
     };
 
-    setAnalysis({
-      suspected_type,
-      confidence: payload.confidence,
-      total_correct,
-      total_wrong
-    });
-
     try {
       await axios.post("http://localhost:8000/api/colorblindness/save-result", payload);
+      // Redirect to results page after successful save
+      navigate('/color-blind-result');
     } catch (e) {
       console.error("Error saving results:", e);
       alert("Error saving results. Please try again later.");
+      setSavingResults(false);
     }
   };
 
@@ -174,36 +173,50 @@ const ColorBlindTest = () => {
   };
 
   if (imageList.length === 0) {
-    return <div className="colorblind-loading">Loading images...</div>;
-  }
-
-  if (showAnalysis && analysis) {
     return (
       <>
-      <UserNavBar />
-      <div className="colorblind-analysis-container">
-        <div className="colorblind-analysis-card">
-          <h2 className="colorblind-analysis-title">Test Complete!</h2>
-          <div className="colorblind-analysis-content">
-            <div className="colorblind-analysis-item">
-              <span className="colorblind-analysis-label">Suspected Type:</span>{' '}
-              <span className="colorblind-analysis-value">{analysis.suspected_type}</span>
-            </div>
-            <div className="colorblind-analysis-item">
-              <span className="colorblind-analysis-label">Confidence:</span>{' '}
-              <span className="colorblind-analysis-value">{analysis.confidence}%</span>
-            </div>
-            <div className="colorblind-analysis-item">
-              <span className="colorblind-analysis-label">Correct:</span>{' '}
-              <span className="colorblind-analysis-value">{analysis.total_correct} / {MAX_PLATES}</span>
-            </div>
-            <div className="colorblind-analysis-item">
-              <span className="colorblind-analysis-label">Incorrect:</span>{' '}
-              <span className="colorblind-analysis-value">{analysis.total_wrong}</span>
+        <UserNavBar />
+        <div className="colorblind-loading">Loading images...</div>
+      </>
+    );
+  }
+
+  // Show saving state when processing results
+  if (savingResults) {
+    return (
+      <>
+        <UserNavBar />
+        <div className="colorblind-analysis-container">
+          <div className="colorblind-analysis-card">
+            <h2 className="colorblind-analysis-title">Processing Results...</h2>
+            <div className="colorblind-analysis-content">
+              <p style={{ fontSize: '1.2em', color: '#666' }}>
+                Please wait while we analyze your test results and save them.
+              </p>
+              <div style={{ 
+                marginTop: '20px', 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center' 
+              }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  border: '4px solid #f3f3f3',
+                  borderTop: '4px solid #007bff',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }}></div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+        <style jsx>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
       </>
     );
   }

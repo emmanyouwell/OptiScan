@@ -74,3 +74,62 @@ async def save_colorblindness_result(test: ColorBlindnessTestInput):
     # Save to MongoDB
     result = db.colorblindness_tests.insert_one(test_doc.dict(by_alias=True))
     return {"message": "Test result saved", "id": str(result.inserted_id)}
+
+
+@router.get("/results/{user_id}")
+async def get_user_colorblindness_results(user_id: str):
+    """
+    Get the latest colorblindness test result for a specific user
+    """
+    try:
+        user_obj_id = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user_id format")
+    
+    # Find the most recent test for this user
+    test_result = db.colorblindness_tests.find_one(
+        {"user_id": user_obj_id},
+        sort=[("test_date", -1)]  # Sort by test_date descending to get the latest
+    )
+    
+    if not test_result:
+        raise HTTPException(status_code=404, detail="No test results found for this user")
+    
+    # Convert ObjectId to string for JSON serialization
+    test_result["_id"] = str(test_result["_id"])
+    test_result["user_id"] = str(test_result["user_id"])
+    
+    return test_result
+
+@router.get("/results/{user_id}/all")
+async def get_all_user_colorblindness_results(user_id: str):
+    """
+    Get all colorblindness test results for a specific user (optional endpoint for history)
+    """
+    try:
+        user_obj_id = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user_id format")
+    
+    # Find all tests for this user, sorted by most recent first
+    test_results = list(db.colorblindness_tests.find(
+        {"user_id": user_obj_id},
+        sort=[("test_date", -1)]
+    ))
+    
+    if not test_results:
+        raise HTTPException(status_code=404, detail="No test results found for this user")
+    
+    # Convert ObjectIds to strings for JSON serialization
+    for result in test_results:
+        result["_id"] = str(result["_id"])
+        result["user_id"] = str(result["user_id"])
+    
+    return {"results": test_results, "count": len(test_results)}
+
+@router.get("/results/{user_id}/latest")
+async def get_latest_user_colorblindness_result(user_id: str):
+    """
+    Alternative endpoint that explicitly gets the latest result (same as /results/{user_id})
+    """
+    return await get_user_colorblindness_results(user_id)
