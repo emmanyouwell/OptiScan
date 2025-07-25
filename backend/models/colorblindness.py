@@ -12,6 +12,7 @@ class ColorBlindnessType(str, Enum):
 
 class IshiharaPlate(BaseModel):
     plate_number: int = Field(..., ge=1, le=38)  # Standard Ishihara plates
+    image_url: Optional[str] = None 
     correct_answer: str
     user_answer: str
     is_correct: bool

@@ -16,6 +16,7 @@ const ColorBlindTest = () => {
   const [loadingPrediction, setLoadingPrediction] = useState(false);
   const [savingResults, setSavingResults] = useState(false); // Add loading state for saving
 
+
   useEffect(() => {
     axios.get("http://localhost:8000/api/plates")
       .then(res => {
@@ -58,22 +59,37 @@ const ColorBlindTest = () => {
     };
     fetchAndPredict();
   }, [currentIndex, imageList.length]);
+  const blobToBase64 = (blob) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = () => {
+          resolve(reader.result); // base64 string
+        };
+        reader.readAsDataURL(blob);
+      });
+    };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const currentFile = imageList[currentIndex];
     const correctLabel = currentFile.label.toString();
     const isCorrect = userAnswer === correctLabel;
+    const imgRes = await fetch(`http://localhost:8000${imageList[currentIndex].url}`);
+    const imgBlob = await imgRes.blob();
+    const imageBase64 = await blobToBase64(imgBlob);
 
+  
     setAnswers(prev => [
       ...prev,
       {
         plate_number: currentIndex + 1,
+        image_base64: imageBase64,
+        filename: imageList[currentIndex].filename,
         correct_answer: correctLabel,
         user_answer: userAnswer,
         is_correct: isCorrect
       }
     ]);
-
     if (currentIndex + 1 < MAX_PLATES) {
       setCurrentIndex(prev => prev + 1);
     } else {
@@ -89,12 +105,17 @@ const ColorBlindTest = () => {
 
   const analyzeAndSave = async () => {
     setSavingResults(true); // Show loading state
+    const lastImgBlob = await fetch(`http://localhost:8000${imageList[MAX_PLATES - 1].url}`).then(r => r.blob());
+    const lastImageBase64 = await blobToBase64(lastImgBlob);
+
 
     const typeCounts = { protanopia: 0, deuteranopia: 0, tritanopia: 0 };
     const allAnswers = [
       ...answers,
       {
         plate_number: MAX_PLATES,
+        image_base64: lastImageBase64,
+        filename: imageList[MAX_PLATES - 1].filename,
         correct_answer: imageList[MAX_PLATES - 1].label.toString(),
         user_answer: userAnswer,
         is_correct: userAnswer === imageList[MAX_PLATES - 1].label.toString()
@@ -193,11 +214,11 @@ const ColorBlindTest = () => {
               <p style={{ fontSize: '1.2em', color: '#666' }}>
                 Please wait while we analyze your test results and save them.
               </p>
-              <div style={{ 
-                marginTop: '20px', 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center' 
+              <div style={{
+                marginTop: '20px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
               }}>
                 <div style={{
                   width: '40px',
@@ -239,7 +260,7 @@ const ColorBlindTest = () => {
               Plate {currentIndex + 1} of {MAX_PLATES}
             </div>
           </div>
-          
+
           <div className="colorblind-controls-section">
             <div className="colorblind-numpad">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
@@ -260,7 +281,7 @@ const ColorBlindTest = () => {
               </button>
               <div></div>
             </div>
-            
+
             <div className="colorblind-action-buttons">
               <button
                 onClick={handleClear}

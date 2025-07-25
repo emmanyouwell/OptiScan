@@ -13,6 +13,10 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from models.colorblindness import ColorBlindnessTest, IshiharaPlate, ColorBlindnessType
 from config.db import db
+import base64
+import cloudinary.uploader
+from io import BytesIO
+
 
 router = APIRouter()
 
@@ -44,9 +48,11 @@ async def predict_number(file: UploadFile = File(...)):
 
 class PlateInput(BaseModel):
     plate_number: int
+    image_base64: Optional[str] = None
     correct_answer: str
     user_answer: str
     is_correct: bool
+    
 
 class ColorBlindnessTestInput(BaseModel):
     user_id: str
@@ -55,6 +61,26 @@ class ColorBlindnessTestInput(BaseModel):
     confidence: float
     device_info: Optional[dict] = None
 
+# @router.post("/save-result")
+# async def save_colorblindness_result(test: ColorBlindnessTestInput):
+#     try:
+#         user_obj_id = ObjectId(test.user_id)
+#     except Exception:
+#         raise HTTPException(status_code=400, detail="Invalid user_id format")
+
+#     test_doc = ColorBlindnessTest(
+#         user_id=user_obj_id,
+#         plates=[IshiharaPlate(**plate.dict()) for plate in test.plates],
+#         suspected_type=test.suspected_type,
+#         confidence=test.confidence,
+#         device_info=test.device_info,
+#         test_date=datetime.now(timezone.utc)
+#     )
+
+#     # Save to MongoDB
+#     result = db.colorblindness_tests.insert_one(test_doc.dict(by_alias=True))
+#     return {"message": "Test result saved", "id": str(result.inserted_id)}
+
 @router.post("/save-result")
 async def save_colorblindness_result(test: ColorBlindnessTestInput):
     try:
@@ -62,16 +88,45 @@ async def save_colorblindness_result(test: ColorBlindnessTestInput):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid user_id format")
 
+    enriched_plates = []
+
+    for plate in test.plates:
+        plate_dict = plate.dict()
+
+        image_url = None
+        if plate.image_base64:
+            try:
+                # Decode base64 image
+                image_data = base64.b64decode(plate.image_base64.split(",")[-1])
+                image = Image.open(BytesIO(image_data))
+                
+                # Upload to Cloudinary
+                result = cloudinary.uploader.upload(
+                    BytesIO(image_data),
+                    folder="colorblind-tests",
+                    public_id=f"{test.user_id}_{plate.plate_number}_{datetime.now().timestamp()}"
+                )
+                image_url = result.get("secure_url")
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
+
+        enriched_plates.append(IshiharaPlate(
+            plate_number=plate.plate_number,
+            correct_answer=plate.correct_answer,
+            user_answer=plate.user_answer,
+            is_correct=plate.is_correct,
+            image_url=image_url
+        ))
+
     test_doc = ColorBlindnessTest(
         user_id=user_obj_id,
-        plates=[IshiharaPlate(**plate.dict()) for plate in test.plates],
+        plates=enriched_plates,
         suspected_type=test.suspected_type,
         confidence=test.confidence,
         device_info=test.device_info,
         test_date=datetime.now(timezone.utc)
     )
 
-    # Save to MongoDB
     result = db.colorblindness_tests.insert_one(test_doc.dict(by_alias=True))
     return {"message": "Test result saved", "id": str(result.inserted_id)}
 
