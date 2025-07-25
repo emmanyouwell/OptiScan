@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import '../../CSS/Login.css'; 
+import '../../CSS/Login.css';
 import axios from 'axios';
 import BASE_URL from '../../common/baseURL';
 
@@ -12,7 +12,7 @@ function LoginPage() {
     email: '',
     password: ''
   });
-  
+
   const [error, setError] = useState('');
 
   const handleChange = (e) => {
@@ -26,15 +26,15 @@ function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    
+
     if (!formData.email || !formData.password) {
       setError('Please enter both email and password');
       toast.error('Please enter both email and password');
       return;
     }
-    
+
     const loadingToast = toast.loading('Logging in...');
-    
+
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('email', formData.email);
@@ -45,9 +45,9 @@ function LoginPage() {
           'Content-Type': 'multipart/form-data'
         }
       });
-      
+
       toast.dismiss(loadingToast);
-      
+
 
       toast.success('Login successful! Welcome back!', {
         duration: 2000,
@@ -56,25 +56,29 @@ function LoginPage() {
           color: '#ffffff',
         },
       });
-      
-      // Store token and user data
+
       localStorage.setItem('access_token', response.data.access_token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
-      
+
       console.log('Login response:', response.data);
-      
-      // Navigate to LandingPage after a brief delay to show the toast
-      setTimeout(() => {
-        navigate('/home');
-      }, 1500);
-      
+
+      if (response.data.user && response.data.user.role === 'admin') {
+        setTimeout(() => {
+          navigate('/admin/dashboard');
+        }, 1500);
+      } else {
+        setTimeout(() => {
+          navigate('/home');
+        }, 1500);
+      }
+
     } catch (err) {
       // Dismiss loading toast
       toast.dismiss(loadingToast);
-      
+
       const errorMessage = err.response?.data?.detail || 'Login failed';
       setError(errorMessage);
-      
+
       // Show error toast
       toast.error(errorMessage, {
         duration: 4000,
@@ -91,9 +95,9 @@ function LoginPage() {
 
       <div className="login-form-wrapper">
         <h1>Login</h1>
-        
+
         {/* {error && <div className="error-message">{error}</div>} */}
-        
+
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
             <label htmlFor="email">Email</label>
@@ -106,7 +110,7 @@ function LoginPage() {
               placeholder="Enter your email"
             />
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="password">Password</label>
             <input
@@ -118,10 +122,10 @@ function LoginPage() {
               placeholder="Enter your password"
             />
           </div>
-          
+
           <button type="submit" className="login-button">Login</button>
         </form>
-        
+
         <div className="additional-options">
           <a href="/forgot-password">Forgot password?</a>
           <p>Don't have an account? <a href="/register">Register</a></p>
