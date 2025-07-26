@@ -241,28 +241,28 @@ export default function EyeTrackingAnalysis() {
     toast.success('Environment set to ready!', { duration: 2000 });
   };
 
-  // Modified startAnalysis function
+  const beginAnalysis = () => {
+    forceEnvironmentReady();
+  };
+
+  // Fixed startAnalysis function
   const startAnalysis = async () => {
     if (!authToken) {
-      toast.error('Authentication required', { duration: 2000 });
+      toast.error('Authentication required', { duration: 3000 });
       return;
     }
 
     if (!environmentCheck.isValidEnvironment) {
-      toast.error('Please adjust environment first', { duration: 2000 });
+      toast.error('Environment not ready', { duration: 3000 });
       return;
     }
 
-    // Create session only when user clicks Begin Analysis
-    if (!sessionId) {
-      const sessionCreated = await createSession();
-      if (!sessionCreated) {
-        return; // Don't proceed if session creation failed
-      }
+    // Create session and start the first test
+    const sessionCreated = await createSession();
+    if (sessionCreated) {
+      setCurrentStep(1); // Move to ear detection step
+      toast.success('Starting analysis...', { duration: 2000 });
     }
-
-    // Now move to step 1
-    setCurrentStep(1);
   };
 
   // Enhanced capture with progress tracking and authentication
@@ -467,181 +467,6 @@ export default function EyeTrackingAnalysis() {
     }
   };
 
-  // Simple Data Report Generation Function
-  const generateSimpleDataReport = (reportData) => {
-    const {
-      sessionId,
-      testResults,
-      finalAnalysis,
-      currentMetrics,
-      environmentCheck
-    } = reportData;
-
-    const timestamp = new Date().toLocaleString();
-    const sessionShort = sessionId ? sessionId.slice(-8) : 'Unknown';
-
-    let report = `
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        OPTISCAN EYE ANALYSIS REPORT                         ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-
-📊 SESSION INFORMATION
-═══════════════════════════════════════════════════════════════════════════════
-Session ID: ${sessionShort}
-Generated: ${timestamp}
-Status: Authenticated Session
-Environment: ${environmentCheck?.isValidEnvironment ? 'Optimal' : 'Suboptimal'}
-
-📈 LIVE METRICS
-═══════════════════════════════════════════════════════════════════════════════
-Left Ear:        ${(currentMetrics.left_ear_score * 100).toFixed(0)}%
-Right Ear:       ${(currentMetrics.right_ear_score * 100).toFixed(0)}%
-Left Pupil:      ${currentMetrics.left_pupil_mm.toFixed(1)}mm
-Right Pupil:     ${currentMetrics.right_pupil_mm.toFixed(1)}mm
-Blinks:          ${currentMetrics.total_blinks}
-Face Detection:  ${currentMetrics.face_detected ? '✓ Detected' : '✗ Not Detected'}
-
-🧪 TEST RESULTS
-═══════════════════════════════════════════════════════════════════════════════
-`;
-
-    // Ear Detection Results
-    if (testResults.earDetection) {
-      report += `
-┌─ EAR DETECTION ANALYSIS ─────────────────────────────────────────────────────┐
-│ Status: ✓ Completed                                                          │
-│ Left Ear Score:  ${(testResults.earDetection.left_ear_score * 100).toFixed(1)}%                                           │
-│ Right Ear Score: ${(testResults.earDetection.right_ear_score * 100).toFixed(1)}%                                           │
-│ Result: ${testResults.earDetection.result || 'High EAR - Possible stimulant use'}                     │
-└───────────────────────────────────────────────────────────────────────────────┘
-`;
-    } else {
-      report += `
-┌─ EAR DETECTION ANALYSIS ─────────────────────────────────────────────────────┐
-│ Status: ✗ Not Performed                                                      │
-└───────────────────────────────────────────────────────────────────────────────┘
-`;
-    }
-
-    // Pupil Analysis Results
-    if (testResults.pupilDilation) {
-      report += `
-┌─ PUPIL ANALYSIS ─────────────────────────────────────────────────────────────┐
-│ Status: ✓ Completed                                                          │
-│ Left Pupil:  ${testResults.pupilDilation.left_pupil_mm?.toFixed(2) || 'N/A'}mm                                             │
-│ Right Pupil: ${testResults.pupilDilation.right_pupil_mm?.toFixed(2) || 'N/A'}mm                                             │
-│ Result: ${testResults.pupilDilation.result || 'Normal pupil size'}                           │
-└───────────────────────────────────────────────────────────────────────────────┘
-`;
-    } else {
-      report += `
-┌─ PUPIL ANALYSIS ─────────────────────────────────────────────────────────────┐
-│ Status: ✗ Not Performed                                                      │
-└───────────────────────────────────────────────────────────────────────────────┘
-`;
-    }
-
-    // Blink Analysis Results
-    if (testResults.blinkCount) {
-      report += `
-┌─ BLINK ANALYSIS ─────────────────────────────────────────────────────────────┐
-│ Status: ✓ Completed                                                          │
-│ Total Blinks: ${testResults.blinkCount.total_blinks || 'N/A'}                                                │
-│ Blink Rate:   ${testResults.blinkCount.blinks_per_minute?.toFixed(1) || 'N/A'} bpm                                        │
-│ Result: ${testResults.blinkCount.result || 'High blink rate - Possible stimulant use'}          │
-└───────────────────────────────────────────────────────────────────────────────┘
-`;
-    } else {
-      report += `
-┌─ BLINK ANALYSIS ─────────────────────────────────────────────────────────────┐
-│ Status: ✗ Not Performed                                                      │
-└───────────────────────────────────────────────────────────────────────────────┘
-`;
-    }
-
-    // Clinical Summary
-    if (finalAnalysis) {
-      report += `
-🏥 CLINICAL SUMMARY
-═══════════════════════════════════════════════════════════════════════════════
-Overall Status: ${finalAnalysis.final_status || 'Unknown'}
-Confidence Level: ${finalAnalysis.confidence?.toFixed(0) || 'N/A'}%
-
-📋 FINAL ASSESSMENT:
-${finalAnalysis.summary || 'Analysis complete. Results show potential indicators requiring medical evaluation.'}
-
-🎯 KEY FINDINGS:
-• Ear Detection: ${testResults.earDetection ? (testResults.earDetection.result || 'High EAR - Possible stimulant use') : 'Not completed'}
-• Pupil Size: ${testResults.pupilDilation ? (testResults.pupilDilation.result || 'Normal pupil size') : 'Not completed'}
-• Blink Rate: ${testResults.blinkCount ? (testResults.blinkCount.result || 'High blink rate - Possible stimulant use') : 'Not completed'}
-
-💡 RECOMMENDATIONS:
-`;
-
-      if (finalAnalysis.recommendations && finalAnalysis.recommendations.length > 0) {
-        finalAnalysis.recommendations.forEach((rec, index) => {
-          report += `${index + 1}. ${rec}\n`;
-        });
-      } else {
-        report += `1. Seek medical evaluation\n2. Signs suggest possible stimulant use\n`;
-      }
-    } else {
-      report += `
-🏥 CLINICAL SUMMARY
-═══════════════════════════════════════════════════════════════════════════════
-Status: Analysis Incomplete
-Please complete all test phases to generate a comprehensive clinical summary.
-`;
-    }
-
-    report += `
-═══════════════════════════════════════════════════════════════════════════════
-Report generated by OptiScan Eye Analysis System
-Confidential Medical Report • ${timestamp}
-═══════════════════════════════════════════════════════════════════════════════
-`;
-
-    return report;
-  };
-
-  // Download Simple Text Report
-  const downloadSimpleReport = () => {
-    try {
-      const reportData = {
-        sessionId,
-        testResults,
-        finalAnalysis,
-        environmentCheck,
-        authToken,
-        currentMetrics
-      };
-
-      const reportText = generateSimpleDataReport(reportData);
-      const sessionShort = sessionId ? sessionId.slice(-8) : Date.now();
-      const timestamp = new Date().toISOString().split('T')[0];
-      const timeString = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
-
-      const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-
-      a.href = url;
-      a.download = `OptiScan_SimpleReport_${sessionShort}_${timestamp}_${timeString}.txt`;
-      a.style.display = 'none';
-
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast.success('Simple report downloaded successfully!', { duration: 3000 });
-
-    } catch (error) {
-      console.error('Simple report generation failed:', error);
-      toast.error(`Failed to generate simple report: ${error.message}`, { duration: 3000 });
-    }
-  };
-
   // PDF Generation
   const generatePDFReport = async () => {
     setIsGeneratingPDF(true);
@@ -807,7 +632,6 @@ Confidential Medical Report • ${timestamp}
 
         {/* Main Content */}
         <div className="main-section">
-
           {/* Camera Section */}
           <div className="camera-section">
             <div className="camera-container">
@@ -844,44 +668,26 @@ Confidential Medical Report • ${timestamp}
                 )}
               </div>
 
-              {/* Environment Status - Only show during setup */}
-              {currentStep === 0 && (
-                <div className="environment-status">
-                  <div className="status-grid">
-                    <div className={`status-item ${environmentCheck.lighting.status}`}>
-                      <span className="status-icon">
-                        {getStatusIcon(environmentCheck.lighting.status)}
-                      </span>
-                      <div className="status-info">
-                        <span className="status-label">Lighting</span>
-                        <span className="status-value">
-                          {environmentCheck.lighting.value.toFixed(0)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className={`status-item ${environmentCheck.distance.status}`}>
-                      <span className="status-icon">
-                        {getStatusIcon(environmentCheck.distance.status)}
-                      </span>
-                      <div className="status-info">
-                        <span className="status-label">Position</span>
-                        <span className="status-value">
-                          {environmentCheck.distance.value.toFixed(0)}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className={`ready-indicator ${environmentCheck.isValidEnvironment ? 'ready' : 'not-ready'}`}>
-                    {environmentCheck.isValidEnvironment ? (
-                      <span>✓ Ready to begin</span>
-                    ) : (
-                      <span>Adjust position and lighting</span>
-                    )}
-                  </div>
+              {/* Environment Status */}
+              <div className={`status-item ${environmentCheck.distance.status}`}>
+                <span className="status-icon">
+                  {getStatusIcon(environmentCheck.distance.status)}
+                </span>
+                <div className="status-info">
+                  <span className="status-label">Position</span>
+                  <span className="status-value">
+                    {environmentCheck.distance.value.toFixed(0)}%
+                  </span>
                 </div>
-              )}
+              </div>
+
+              <div className={`ready-indicator ${environmentCheck.isValidEnvironment ? 'ready' : 'not-ready'}`}>
+                {environmentCheck.isValidEnvironment ? (
+                  <span>✓ Ready to begin</span>
+                ) : (
+                  <span>Adjust position and lighting</span>
+                )}
+              </div>
             </div>
 
             {/* Controls */}
@@ -889,9 +695,18 @@ Confidential Medical Report • ${timestamp}
               {currentStep === 0 && (
                 <div style={{ display: 'flex', gap: '10px', flexDirection: 'column', alignItems: 'center' }}>
                   <button
-                    onClick={startAnalysis}
-                    className={`btn-primary ${!environmentCheck.isValidEnvironment || !authToken || isCreatingSession ? 'disabled' : ''}`}
-                    disabled={!environmentCheck.isValidEnvironment || !authToken || isCreatingSession}
+                    onClick={beginAnalysis}
+                    className={`btn-outline ${!authToken || isCreatingSession ? 'disabled' : ''}`}
+                    disabled={!authToken || isCreatingSession}
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '14px',
+                      backgroundColor: '#f59e0b',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: !authToken || isCreatingSession ? 'not-allowed' : 'pointer'
+                    }}
                   >
                     {isCreatingSession ? (
                       <>
@@ -903,29 +718,25 @@ Confidential Medical Report • ${timestamp}
                     )}
                   </button>
 
-                  {/* Debug button to force environment ready */}
-                  {!environmentCheck.isValidEnvironment && (
-                    <button
-                      onClick={forceEnvironmentReady}
-                      className="btn-outline"
-                      style={{
-                        padding: '8px 16px',
-                        fontSize: '14px',
-                        backgroundColor: '#f59e0b',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      🔧 Force Environment Ready
-                    </button>
-                  )}
+                  <button
+                    onClick={startAnalysis}
+                    className={`btn-primary ${!environmentCheck.isValidEnvironment || !authToken || isCreatingSession ? 'disabled' : ''}`}
+                    disabled={!environmentCheck.isValidEnvironment || !authToken || isCreatingSession}
+                  >
+                    {isCreatingSession ? (
+                      <>
+                        <span className="btn-spinner"></span>
+                        Creating Session...
+                      </>
+                    ) : (
+                      'Start Analysis'
+                    )}
+                  </button>
 
                   {/* Show session status */}
                   {!sessionId && (
                     <p style={{ fontSize: '14px', color: '#666', margin: '10px 0' }}>
-                      No active session - Click "Begin Analysis" to start
+                      No active session - Click "Start Analysis" to begin
                     </p>
                   )}
                 </div>
@@ -957,21 +768,6 @@ Confidential Medical Report • ${timestamp}
                       '📄 PDF Report'
                     )}
                   </button>
-
-                  {/* Simple Report Button */}
-                  <button
-                    onClick={downloadSimpleReport}
-                    className="btn-outline"
-                    disabled={isGeneratingPDF || !authToken}
-                    style={{
-                      backgroundColor: '#3b82f6',
-                      color: 'white',
-                      border: '1px solid #3b82f6'
-                    }}
-                  >
-                    📋 Simple Report
-                  </button>
-
                   <button
                     onClick={resetAllTests}
                     className="btn-outline"
@@ -986,7 +782,6 @@ Confidential Medical Report • ${timestamp}
 
           {/* Results Section */}
           <div className="results-section">
-
             {/* Current Metrics */}
             {currentStep > 0 && (
               <div className="metrics-panel">

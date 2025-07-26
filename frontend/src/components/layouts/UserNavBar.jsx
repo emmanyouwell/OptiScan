@@ -4,8 +4,8 @@ import toast from 'react-hot-toast';
 import BASE_URL from '../../common/baseURL';
 import '../../CSS/LandingPage.css';
 import { useNavigate } from 'react-router-dom';
-export default function UserNavBar() {
 
+export default function UserNavBar() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
@@ -22,11 +22,9 @@ export default function UserNavBar() {
                         }
                     });
 
-                    // console.log('User data received:', response.data);
                     setUser(response.data.user);
                 } catch (error) {
                     console.error('Error fetching user:', error);
-                    // Token might be expired or invalid
                     localStorage.removeItem('access_token');
                     localStorage.removeItem('user');
                     toast.error('Session expired, please login again');
@@ -39,7 +37,6 @@ export default function UserNavBar() {
         checkAuthStatus();
     }, []);
 
-    // Logout function
     const handleLogout = () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
@@ -55,9 +52,9 @@ export default function UserNavBar() {
             </div>
         );
     }
+
     return (
         <header className="header">
-
             <div className="container">
                 <div className="logo">
                     <h2>OptiScan</h2>
@@ -69,19 +66,87 @@ export default function UserNavBar() {
                     <span></span>
                     <a href="/eye-conditions">Eye Conditions</a>
                     <span></span>
-                    {/* <a href="/about">Eye Test</a>
-                    <span></span> */}
+                    
                     <div className="dropdown">
                         <button className="dropbtn">Eye Test</button>
                         <div className="dropdown-content">
                             <a href="/eye-tracking">Eye Tracking</a>
                             <a href="/colorblind-test">Color Blind</a>
-                            <a href="/dry-eye-test">Dry Eye</a>
                         </div>
                     </div>
                     <span></span>
-                    <a href="/about">Clinics</a>
+                    
+                    <div className="dropdown clinic-dropdown">
+                        <button className="dropbtn">Clinics</button>
+                        <div className="dropdown-content clinic-dropdown-content">
+                            <div className="clinic-item">
+                                <div className="clinic-image">
+                                    <img src="/api/placeholder/60/60" alt="REC Clinic" />
+                                </div>
+                                <div className="clinic-details">
+                                    <h4>Roque Eye Clinic (REC)</h4>
+                                    <p>St. Luke's Medical Center, Global City</p>
+                                    <a href="https://eye.com.ph/contact-us/book/" target="_blank" rel="noopener noreferrer">
+                                        Visit Website
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div className="clinic-item">
+                                <div className="clinic-image">
+                                    <img src="/api/placeholder/60/60" alt="Martinez Eye Clinic" />
+                                </div>
+                                <div className="clinic-details">
+                                    <h4>Martinez Eye Clinic</h4>
+                                    <p>BGC, Taguig</p>
+                                    <a href="https://www.stlukes.com.ph/health-specialties-and-services/institutes-departments-centers-and-services/eye-institute" target="_blank" rel="noopener noreferrer">
+                                        Visit Website
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div className="clinic-item">
+                                <div className="clinic-image">
+                                    <img src="/api/placeholder/60/60" alt="Medical Center Taguig" />
+                                </div>
+                                <div className="clinic-details">
+                                    <h4>Medical Center Taguig</h4>
+                                    <p>Ophthalmology Department (Public)</p>
+                                    <a href="https://medicalcentertaguig.com/speciality/ophthalmology/" target="_blank" rel="noopener noreferrer">
+                                        Visit Website
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div className="clinic-item">
+                                <div className="clinic-image">
+                                    <img src="/api/placeholder/60/60" alt="Asian Eye Institute" />
+                                </div>
+                                <div className="clinic-details">
+                                    <h4>Asian Eye Institute</h4>
+                                    <p>Rockwell, Makati City</p>
+                                    <a href="https://asianeyeinstitute.com/" target="_blank" rel="noopener noreferrer">
+                                        Visit Website
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div className="clinic-item">
+                                <div className="clinic-image">
+                                    <img src="/api/placeholder/60/60" alt="American Eye Center" />
+                                </div>
+                                <div className="clinic-details">
+                                    <h4>The American Eye Center</h4>
+                                    <p>Shangri‑La Plaza, Ortigas/Mandaluyong</p>
+                                    <a href="https://americaneye.com.ph/index.php/contact-us/#" target="_blank" rel="noopener noreferrer">
+                                        Visit Website
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <span></span>
+                    
                     <a href="/contact">History</a>
                 </nav>
 
@@ -101,9 +166,7 @@ export default function UserNavBar() {
                         </div>
                     )}
                 </div>
-
             </div>
-
         </header>
     )
 }
